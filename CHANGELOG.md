@@ -21,6 +21,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Mobile drawers no longer push the DSH conversation layout or expose desktop resize controls.
 - Package assets now include the README screenshots.
 
+### Fixed
+
+- Prevented an asynchronous tmux stdin `EPIPE` from crashing DSH when shutdown races the detach handshake.
+
 ## [0.3.0]
 
 ### Added

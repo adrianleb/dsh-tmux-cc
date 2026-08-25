@@ -519,8 +519,14 @@ function defaultTransport(tmuxBin: string, args: string[]): ControlTransport {
   })
   child.stdout.setEncoding('utf8')
   child.stderr.setEncoding('utf8')
+  // A process shutdown can race the detach-client grace write. Consume the
+  // stream-level EPIPE (the child exit handler fails pending commands) instead
+  // of letting an unhandled stdin error terminate the DSH host.
+  child.stdin.on('error', () => {})
   return {
-    write: (data) => { child.stdin.write(data) },
+    write: (data) => {
+      if (!child.stdin.destroyed && child.stdin.writable) child.stdin.write(data, () => {})
+    },
     kill: () => { child.kill() },
     onData: (fn) => { child.stdout.on('data', fn) },
     onStderr: (fn) => { child.stderr.on('data', fn) },
