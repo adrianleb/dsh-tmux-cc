@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.5.1]
+
+### Fixed
+
+- Pane visual boxes now absorb tmux's excluded one-cell right/bottom separators, eliminating gaps and making adjacent desktop and mobile borders meet exactly.
+- Desktop resize sashes now center on the corrected pane boundaries and span the complete shared edge.
+- Revalidated toolbar control alignment and replaced the affected screenshots with contiguous-grid captures.
+
 ## [0.5.0]
 
 ### Changed
@@ -65,7 +73,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Switched input to byte-safe, hex-encoded `send-keys -H` commands.
 - Paired control replies by tmux block tags and added command timeouts.
 
-[Unreleased]: https://github.com/adrianleb/dsh-tmux-cc/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/adrianleb/dsh-tmux-cc/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/adrianleb/dsh-tmux-cc/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/adrianleb/dsh-tmux-cc/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/adrianleb/dsh-tmux-cc/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/adrianleb/dsh-tmux-cc/compare/v0.3.0...v0.4.0

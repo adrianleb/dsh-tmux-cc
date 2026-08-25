@@ -14,6 +14,21 @@ test('client bundle invariants', () => {
   assert.doesNotMatch(src, /FitAddon/)
   assert.doesNotMatch(src, /addon-fit/)
   assert.match(src, /term\.resize\(pane\.width, pane\.height\)/)
+  // Visual boxes absorb tmux's one-cell separators so pane borders meet.
+  assert.match(src, /function paneVisualBox\(/)
+  assert.match(src, /pane\.width \+ \(pane\.left \+ pane\.width < cols \? 1 : 0\)/)
+  assert.match(src, /pane\.height \+ \(pane\.top \+ pane\.height < rows \? 1 : 0\)/)
+  const visualSource = src.match(/function paneVisualBox\(pane, cols, rows\) \{[\s\S]*?\n    \}/)?.[0]
+  assert.ok(visualSource)
+  const paneVisualBox = Function(`return (${visualSource})`)() as (
+    pane: { left: number; top: number; width: number; height: number }, cols: number, rows: number,
+  ) => { left: number; top: number; width: number; height: number }
+  assert.deepEqual(paneVisualBox({ left: 0, top: 0, width: 79, height: 23 }, 160, 48), {
+    left: 0, top: 0, width: 80, height: 24,
+  })
+  assert.deepEqual(paneVisualBox({ left: 80, top: 24, width: 80, height: 24 }, 160, 48), {
+    left: 80, top: 24, width: 80, height: 24,
+  })
   // Keyboard handling is scoped to the dock, never window-global stealing.
   assert.match(src, /host\.contains\(event\.target\)/)
   // Reconnect re-seeds from an authoritative capture.

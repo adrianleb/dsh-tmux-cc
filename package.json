@@ -1,6 +1,6 @@
 {
   "name": "dsh-tmux-cc",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "A persistent tmux control-mode cockpit for DeepSeek Harness Web.",
   "license": "MIT",
   "author": {
