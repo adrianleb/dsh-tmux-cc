@@ -1,0 +1,79 @@
+{
+  "name": "dsh-tmux-cc",
+  "version": "0.3.0",
+  "description": "A persistent tmux control-mode cockpit for DeepSeek Harness Web.",
+  "license": "MIT",
+  "author": {
+    "name": "adrianleb",
+    "url": "https://github.com/adrianleb"
+  },
+  "type": "module",
+  "keywords": [
+    "deepseek",
+    "deepseek-harness",
+    "dsh",
+    "tmux",
+    "control-mode",
+    "terminal"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/adrianleb/dsh-tmux-cc.git"
+  },
+  "homepage": "https://github.com/adrianleb/dsh-tmux-cc#readme",
+  "bugs": {
+    "url": "https://github.com/adrianleb/dsh-tmux-cc/issues"
+  },
+  "main": "./dist/index.js",
+  "exports": {
+    ".": "./dist/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "lib",
+    "cordis.patch.yml",
+    "README.md",
+    "README.zh-CN.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@11.23.0",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-slots",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-locale"
+      ],
+      "platform": "web"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "pnpm test && pnpm run typecheck && pnpm run build",
+    "prepare": "pnpm run build",
+    "test": "node --experimental-strip-types --test src/*.test.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1"
+  },
+  "dependencies": {
+    "@xterm/xterm": "^5.5.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@types/node": "^22.10.0",
+    "@types/ws": "^8.5.10",
+    "typescript": "^5.6.0"
+  }
+}

@@ -1,0 +1,139 @@
+# dsh-tmux-cc
+
+简体中文 · [English](./README.md)
+
+一个用于 DeepSeek Harness Web 的持久化 **tmux 控制模式工作台**。它通过 `tmux -C` 连接已有的 tmux 会话，用 xterm.js 渲染每个窗格，并且在切换聊天时始终保持可见。
+
+[![CI](https://github.com/adrianleb/dsh-tmux-cc/actions/workflows/ci.yml/badge.svg)](https://github.com/adrianleb/dsh-tmux-cc/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
+
+> 进程和布局仍由 tmux 管理，本插件只是一个新的显示与控制端。它不是“在浏览器终端里运行 tmux”，不需要 PTY，也没有原生 Node.js 扩展依赖。
+
+## 功能特性
+
+- **跨聊天持久显示** —— 工作台属于 DSH Web 外壳，而不是某个对话。
+- **原生 tmux 窗格** —— 窗格布局、窗口标签、焦点、缩放、分屏和大小调整都会与 tmux 同步。
+- **不干扰其他终端** —— 有其他终端连接时使用 `ignore-size` 镜像模式；只有工作台参与尺寸计算时，自动切换为清晰的 1:1 接管模式。
+- **可靠的输入传输** —— 通过十六进制 `send-keys -H` 原样转发输入，包括回车、粘贴和 Unicode。
+- **多会话与多窗口** —— 支持连接、断开、切换窗口，以及按需启动可选的命名会话方案。
+- **中英文界面** —— 自动跟随 DSH 的语言设置显示英文或简体中文。
+- **无原生依赖** —— 控制通道仅使用标准输入/输出管道。
+
+## 环境要求
+
+- 带 Web profile 的 [DeepSeek Harness](https://github.com/deepseek-ai/DeepSeek-Harness)
+- Node.js 22 或更高版本
+- pnpm（推荐通过 Corepack 使用）
+- tmux 与 DSH 安装在同一台主机上（已在 tmux 3.7b 验证）
+- Linux 或 macOS
+
+## 安装
+
+```bash
+git clone https://github.com/adrianleb/dsh-tmux-cc.git
+cd dsh-tmux-cc
+
+corepack enable
+pnpm install
+pnpm run check
+
+dsh plugin --profile web add "$PWD"
+```
+
+重启当前的 `dsh web` 进程，然后强制刷新 Web 页面。右上角会出现 **tmux** 按钮；也可以在 **设置 → tmux** 中找到相同的控制项。
+
+更新方法：
+
+```bash
+cd dsh-tmux-cc
+git pull --ff-only
+pnpm install
+pnpm run check
+# 重启 dsh web，然后刷新浏览器。
+```
+
+## 使用方法
+
+1. 打开 tmux 工作台。
+2. 在下拉列表中选择一个正在运行的 tmux 会话；插头按钮用于断开或重新连接。
+3. 点击窗格获取焦点，然后正常输入。
+4. 窗格获得焦点后，可使用 `Ctrl+B`，再按方向键、`x`、`z`、`"` 或 `%` 执行常用 tmux 操作。
+5. 拖动工作台边缘或窗格分隔条调整大小；使用标签切换 tmux 窗口。
+
+为了避免意外终止整个会话，本插件拒绝关闭会话中的最后一个窗格。
+
+## 尺寸策略
+
+插件每五秒自动检查一次，并在以下两种模式间切换：
+
+- **镜像（Mirror）** —— 存在普通 `tmux attach` 或 iTerm2 `-CC` 等其他尺寸客户端。工作台保持 `ignore-size`，不会改变其他客户端的终端尺寸；每个窗格按真实字符网格渲染，再缩放字体以适应工作台。
+- **接管（Takeover）** —— 当前只有 `ignore-size` 客户端。工作台通过 `refresh-client -C` 上报可用网格，并按原生字体大小渲染。
+
+打开其他 tmux 客户端后，工作台会退回镜像模式；关闭后则恢复接管模式。
+
+## 配置
+
+在 DSH Web profile 的插件配置中添加选项：
+
+```yaml
+- id: tmux-cc
+  name: dsh-tmux-cc
+  config:
+    # 可选。默认依次使用 $DSH_TMUX_BIN 和 PATH 中的 `tmux`。
+    tmuxBin: /usr/local/bin/tmux
+
+    # 可选的命名会话方案。
+    layouts:
+      - id: project
+        label: 项目工作台
+        session: project
+        launch: /home/me/.local/bin/start-project-tmux
+        launchArgs: ["--ensure-only"]
+```
+
+如果方案对应的会话不存在，选择该方案时会先执行 `launch` 和 `launchArgs`，然后连接。如果省略 `launchArgs`，默认值为 `["--ensure-only"]`。启动器配置属于受信任的管理员输入，并会以运行 DSH 的操作系统用户权限执行。主机上的可执行文件路径不会发送给浏览器。
+
+## 项目结构
+
+| 层 | 路径 | 职责 |
+| --- | --- | --- |
+| DSH 主机插件 | `src/` | HTTP/WebSocket 路由、tmux 控制客户端、布局与尺寸状态 |
+| 浏览器客户端 | `lib/client.js` | DSH UI 插槽、工作台、xterm.js 窗格、输入与尺寸调整 |
+| DSH bundle 补丁 | `cordis.patch.yml` | 在 profile 中注册主机插件 |
+| 测试 | `src/*.test.ts` | 布局解码、控制协议、安全策略和客户端 bundle 约束 |
+
+主机通过按行分帧的控制模式与 tmux 通信。命令回复使用 `%begin/%end/%error` 标签配对；每个命令都有超时保护；tmux 的主动通知会触发状态刷新。
+
+## 安全说明
+
+本插件可以向 DSH 操作系统用户拥有的 tmux 会话发送按键。因此，**能够访问 DSH Web 端口，就相当于能够控制该用户的 tmux 会话并执行 Shell 操作。** 插件不会增加独立登录层，而是依赖 DSH 的网络边界和 trusted-host 配置。除非你已主动保护远程访问，否则请仅监听本机回环地址。
+
+- HTTP 路由会检查本机/可信主机；WebSocket 控制还必须提供允许的 `Origin`。
+- 浏览器可以获取会话元数据和终端输出，但无法获取配置的启动器路径。
+- 插件不会使用 `attach -d`，因此不会抢占其他已连接客户端。
+- 本项目不收集遥测数据。
+
+如需报告安全漏洞，请按照 [SECURITY.md](./SECURITY.md) 中的方式私下联系维护者。
+
+## 常见问题
+
+- **没有 tmux 按钮：** 确认插件已加入 `web` profile，运行 `pnpm run build`，重启当前 `dsh web` 进程并强制刷新页面。
+- **没有会话：** 使用运行 DSH 的同一个操作系统用户执行 `tmux list-sessions`。
+- **找不到 `tmux`：** 将 `config.tmuxBin` 或 `DSH_TMUX_BIN` 设置为绝对路径。
+- **远程 DSH 主机请求被拒绝：** 将主机名加入 DSH 的 trusted-host 配置；不要关闭请求安全检查。
+- **会话启动器失败：** 以 DSH 用户身份手动运行配置的程序，并确认它能在 20 秒内创建指定会话。
+
+## 开发
+
+```bash
+pnpm install
+pnpm test
+pnpm run typecheck
+pnpm run build
+```
+
+`pnpm run check` 会依次执行以上三个检查。欢迎参与贡献，详情请阅读 [CONTRIBUTING.md](./CONTRIBUTING.md)。
+
+## 许可证
+
+[MIT](./LICENSE)

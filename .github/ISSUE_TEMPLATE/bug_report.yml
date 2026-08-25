@@ -1,0 +1,46 @@
+name: Bug report / 问题报告
+description: Report a reproducible problem / 报告可复现的问题
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting a bug. Please do not include secrets or terminal output containing private data.
+        感谢反馈问题。请勿包含密钥或带有隐私信息的终端输出。
+  - type: input
+    id: version
+    attributes:
+      label: Version / 版本
+      placeholder: "0.3.0 or commit SHA"
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment / 环境
+      description: DSH, Node.js, tmux, OS, and browser versions / DSH、Node.js、tmux、操作系统和浏览器版本
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps / 复现步骤
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior / 预期行为
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior / 实际行为
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Sanitized logs / 已脱敏日志
+      render: shell
