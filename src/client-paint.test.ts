@@ -23,4 +23,16 @@ test('client bundle invariants', () => {
   assert.match(src, /type: 'resize'/)
   assert.match(src, /reportDockGrid/)
   assert.match(src, /sizeMode/)
+  // Mobile: a real narrow breakpoint, full-screen drawer, visual keyboard inset,
+  // and one readable active pane selected through pane tabs.
+  assert.match(src, /NARROW_MAX_WIDTH = 768/)
+  assert.match(src, /@media \(max-width:767px\)/)
+  assert.match(src, /window\.visualViewport/)
+  assert.match(src, /vv\.height \+ \(vv\.offsetTop/)
+  assert.match(src, /data-tmux-cc-pane-tabs/)
+  assert.match(src, /data-tmux-cc-pane-tab/)
+  assert.match(src, /prefs\.open && !isNarrowViewport\(\)/)
+  assert.match(src, /data-mobile="1"/)
+  // IME composition keys must never trigger tmux shortcuts.
+  assert.match(src, /event\.isComposing \|\| event\.keyCode === 229/)
 })

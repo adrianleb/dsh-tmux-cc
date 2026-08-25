@@ -5,9 +5,25 @@
 A persistent **tmux control-mode cockpit** for DeepSeek Harness Web. It attaches to an existing tmux session with `tmux -C`, renders every pane with xterm.js, and stays visible when you switch chats.
 
 [![CI](https://github.com/adrianleb/dsh-tmux-cc/actions/workflows/ci.yml/badge.svg)](https://github.com/adrianleb/dsh-tmux-cc/actions/workflows/ci.yml)
+[![DSH plugin](https://img.shields.io/badge/dsh-plugin-5a67d8)](https://github.com/topics/dsh-plugin)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 
 > tmux owns the processes and layout; this plugin is only another view. It does not run tmux inside a browser terminal and does not require a PTY or native Node.js addon.
+
+## Preview
+
+<p align="center">
+  <img src="./assets/dsh-tmux-cc-desktop.png" alt="dsh-tmux-cc desktop cockpit with four synthetic terminal panes" width="100%" />
+  <br /><sub>Desktop cockpit: native tmux layout, window tabs, and adaptive takeover sizing.</sub>
+</p>
+
+<p align="center">
+  <img src="./assets/dsh-tmux-cc-mobile.png" alt="dsh-tmux-cc responsive mobile cockpit with pane tabs" width="360" />
+  <br /><sub>Mobile cockpit: full-screen drawer with one readable pane and touch-friendly pane switching.</sub>
+</p>
+
+> [!NOTE]
+> Both screenshots were generated from an isolated DSH profile and a dedicated tmux server containing synthetic demo data only. They do not contain private conversations, workspaces, or terminal output.
 
 ## Features
 
@@ -16,6 +32,7 @@ A persistent **tmux control-mode cockpit** for DeepSeek Harness Web. It attaches
 - **Non-disruptive sizing** — mirror mode uses `ignore-size` while another terminal is attached; takeover mode provides a crisp 1:1 grid when the dock is the only sizing client.
 - **Safe input transport** — input is forwarded byte-for-byte through hex-encoded `send-keys -H`, including Enter, paste, and Unicode.
 - **Multiple sessions and windows** — attach, detach, switch windows, or launch an optional named session recipe.
+- **Responsive mobile cockpit** — below 768px the dock becomes a full-screen drawer with touch-friendly controls and one readable active pane.
 - **Bilingual UI** — English and Simplified Chinese follow the DSH locale.
 - **No native dependencies** — the control channel uses plain stdin/stdout pipes.
 
@@ -61,6 +78,16 @@ pnpm run check
 5. Drag the dock edge or pane sashes to resize; use the tabs to switch tmux windows.
 
 The plugin refuses to kill the final pane in a session.
+
+## Mobile
+
+At viewport widths below 768px, the cockpit follows the narrow-layout pattern established by dsh-better-sidebar:
+
+- The dock becomes a full-screen floating drawer and stops pushing the DSH conversation layout.
+- Window tabs and pane tabs get dedicated scrollable rows. Only the active tmux pane is shown, using the full remaining screen; tap another pane tab to switch.
+- Dock and pane resize handles are disabled, the desktop side selector is hidden, and primary controls use 44px touch targets.
+- Safe-area padding supports notched devices, while `visualViewport` resize/scroll tracking keeps the terminal above the on-screen keyboard.
+- At 768px and wider, the complete desktop tmux layout and resize controls return automatically.
 
 ## Sizing model
 

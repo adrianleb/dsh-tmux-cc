@@ -5,9 +5,25 @@
 一个用于 DeepSeek Harness Web 的持久化 **tmux 控制模式工作台**。它通过 `tmux -C` 连接已有的 tmux 会话，用 xterm.js 渲染每个窗格，并且在切换聊天时始终保持可见。
 
 [![CI](https://github.com/adrianleb/dsh-tmux-cc/actions/workflows/ci.yml/badge.svg)](https://github.com/adrianleb/dsh-tmux-cc/actions/workflows/ci.yml)
+[![DSH plugin](https://img.shields.io/badge/dsh-plugin-5a67d8)](https://github.com/topics/dsh-plugin)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 
 > 进程和布局仍由 tmux 管理，本插件只是一个新的显示与控制端。它不是“在浏览器终端里运行 tmux”，不需要 PTY，也没有原生 Node.js 扩展依赖。
+
+## 界面预览
+
+<p align="center">
+  <img src="./assets/dsh-tmux-cc-desktop.png" alt="dsh-tmux-cc 桌面工作台与四个合成终端窗格" width="100%" />
+  <br /><sub>桌面工作台：原生 tmux 布局、窗口标签和自适应接管尺寸。</sub>
+</p>
+
+<p align="center">
+  <img src="./assets/dsh-tmux-cc-mobile.png" alt="dsh-tmux-cc 响应式移动工作台与窗格标签" width="360" />
+  <br /><sub>移动工作台：全屏抽屉、单个清晰窗格和触控友好的窗格切换。</sub>
+</p>
+
+> [!NOTE]
+> 两张截图均来自完全隔离的 DSH profile 和独立 tmux server，其中只有合成演示数据，不包含任何私人对话、工作区或终端输出。
 
 ## 功能特性
 
@@ -16,6 +32,7 @@
 - **不干扰其他终端** —— 有其他终端连接时使用 `ignore-size` 镜像模式；只有工作台参与尺寸计算时，自动切换为清晰的 1:1 接管模式。
 - **可靠的输入传输** —— 通过十六进制 `send-keys -H` 原样转发输入，包括回车、粘贴和 Unicode。
 - **多会话与多窗口** —— 支持连接、断开、切换窗口，以及按需启动可选的命名会话方案。
+- **响应式移动工作台** —— 视口小于 768px 时自动切换为全屏抽屉、触控友好的控制栏和单个清晰活动窗格。
 - **中英文界面** —— 自动跟随 DSH 的语言设置显示英文或简体中文。
 - **无原生依赖** —— 控制通道仅使用标准输入/输出管道。
 
@@ -61,6 +78,16 @@ pnpm run check
 5. 拖动工作台边缘或窗格分隔条调整大小；使用标签切换 tmux 窗口。
 
 为了避免意外终止整个会话，本插件拒绝关闭会话中的最后一个窗格。
+
+## 移动端
+
+视口宽度小于 768px 时，工作台采用 dsh-better-sidebar 已验证的窄屏布局思路：
+
+- 工作台变为全屏浮动抽屉，不再挤压 DSH 对话区域。
+- 窗口标签和窗格标签分别使用可横向滚动的行；只显示当前活动 tmux 窗格并占满剩余空间，点击其他窗格标签即可切换。
+- 禁用工作台和窗格拖动条，隐藏桌面端方向选择器，主要按钮采用 44px 触控区域。
+- 刘海屏通过 safe-area 内边距适配；`visualViewport` 的 resize/scroll 监听会在软键盘弹出时将终端保持在键盘上方。
+- 视口达到 768px 后，会自动恢复完整的桌面 tmux 布局和尺寸调整功能。
 
 ## 尺寸策略
 

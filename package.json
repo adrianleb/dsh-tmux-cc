@@ -1,6 +1,6 @@
 {
   "name": "dsh-tmux-cc",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "A persistent tmux control-mode cockpit for DeepSeek Harness Web.",
   "license": "MIT",
   "author": {
@@ -12,9 +12,13 @@
     "deepseek",
     "deepseek-harness",
     "dsh",
+    "dsh-plugin",
     "tmux",
     "control-mode",
-    "terminal"
+    "terminal",
+    "web-terminal",
+    "xtermjs",
+    "mobile"
   ],
   "repository": {
     "type": "git",
@@ -33,6 +37,7 @@
   "files": [
     "dist",
     "lib",
+    "assets",
     "cordis.patch.yml",
     "README.md",
     "README.zh-CN.md",
