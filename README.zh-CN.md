@@ -40,7 +40,7 @@ pnpm run check
 dsh plugin --profile web add "$PWD"
 ```
 
-重启当前的 `dsh web` 进程，然后强制刷新 Web 页面。右上角会出现 **tmux** 按钮；也可以在 **设置 → tmux** 中找到相同的控制项。
+重启当前的 `dsh web` 进程，然后强制刷新 Web 页面。右上角会出现 **tmux** 按钮；**设置 → tmux** 中也提供了简要说明和打开工作台的入口。
 
 更新方法：
 

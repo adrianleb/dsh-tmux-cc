@@ -29,6 +29,6 @@ Include the affected version, environment, reproduction steps, impact, and any s
 
 ## Security scope / 安全边界
 
-The plugin intentionally exposes terminal input and output for tmux sessions owned by the DSH operating-system user. Reports about bypassing the trusted-host/origin fence, unauthorized session access, command injection outside intended terminal input, or leaking configured host paths are in scope.
+The plugin intentionally exposes terminal input and output for tmux sessions owned by the DSH operating-system user. WebSocket control is browser-oriented and requires an allowed `Origin`; non-browser clients without that header are rejected. Reports about bypassing the trusted-host/origin fence, unauthorized session access, command injection outside intended terminal input, or leaking configured host paths are in scope.
 
 本插件会按设计暴露 DSH 操作系统用户所拥有 tmux 会话的输入与输出。以下问题属于安全范围：绕过 trusted-host/同源检查、未授权会话访问、预期终端输入之外的命令注入，以及泄露主机配置路径。

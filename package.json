@@ -36,10 +36,11 @@
     "cordis.patch.yml",
     "README.md",
     "README.zh-CN.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "engines": {
-    "node": ">=22"
+    "node": ">=22.6"
   },
   "packageManager": "pnpm@11.23.0",
   "dsh": {
@@ -61,7 +62,7 @@
     "check": "pnpm test && pnpm run typecheck && pnpm run build",
     "prepare": "pnpm run build",
     "test": "node --experimental-strip-types --test src/*.test.ts",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.test.json"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1"

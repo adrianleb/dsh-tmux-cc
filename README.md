@@ -40,7 +40,7 @@ pnpm run check
 dsh plugin --profile web add "$PWD"
 ```
 
-Restart the existing `dsh web` process, then hard-refresh the Web GUI. A **tmux** button will appear in the upper-right corner; the same controls are available under **Settings → tmux**.
+Restart the existing `dsh web` process, then hard-refresh the Web GUI. A **tmux** button will appear in the upper-right corner; **Settings → tmux** provides a short description and another way to open the dock.
 
 To update:
 
