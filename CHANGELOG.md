@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.4.1]
+
+### Fixed
+
+- Mobile pane switching now overrides the pane's inline desktop `left`/`top` geometry, so every selected pane fills the complete cockpit body instead of remaining offset to its tmux grid position.
+
 ## [0.4.0]
 
 ### Added
@@ -45,7 +51,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Switched input to byte-safe, hex-encoded `send-keys -H` commands.
 - Paired control replies by tmux block tags and added command timeouts.
 
-[Unreleased]: https://github.com/adrianleb/dsh-tmux-cc/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/adrianleb/dsh-tmux-cc/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/adrianleb/dsh-tmux-cc/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/adrianleb/dsh-tmux-cc/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/adrianleb/dsh-tmux-cc/releases/tag/v0.3.0
 [0.2.0]: https://github.com/adrianleb/dsh-tmux-cc/releases/tag/v0.2.0

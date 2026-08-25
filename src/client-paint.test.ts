@@ -33,6 +33,8 @@ test('client bundle invariants', () => {
   assert.match(src, /data-tmux-cc-pane-tab/)
   assert.match(src, /prefs\.open && !isNarrowViewport\(\)/)
   assert.match(src, /data-mobile="1"/)
+  // Inline tmux geometry must not survive when a mobile pane becomes active.
+  assert.match(src, /left:0 !important;top:0 !important;width:100% !important;height:100% !important/)
   // IME composition keys must never trigger tmux shortcuts.
   assert.match(src, /event\.isComposing \|\| event\.keyCode === 229/)
 })
