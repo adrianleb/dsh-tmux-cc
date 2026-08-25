@@ -25,6 +25,7 @@ export interface TmuxSnapshot {
   windowName: string
   cols: number
   rows: number
+  zoomed: boolean
   panes: TmuxPane[]
   sessions: SessionInfo[]
   windows: WindowInfo[]
@@ -288,9 +289,9 @@ export class TmuxControlClient extends EventEmitter<Events> {
 
   async refreshSnapshot(): Promise<TmuxSnapshot> {
     const win = await this.command(
-      "display-message -p -F '#{window_id}\t#{window_name}\t#{window_width}\t#{window_height}\t#{window_layout}\t#{session_name}'",
+      "display-message -p -F '#{window_id}\t#{window_name}\t#{window_width}\t#{window_height}\t#{window_visible_layout}\t#{window_zoomed_flag}\t#{session_name}'",
     )
-    const [windowId, windowName, w, h, layout, sessionName] = win.trim().split('\t')
+    const [windowId, windowName, w, h, visibleLayout, zoomedFlag, sessionName] = win.trim().split('\t')
     if (sessionName) this.sessionName = sessionName
     const list = await this.command(
       "list-panes -F '#{pane_id}\t#{pane_index}\t#{pane_title}\t#{pane_left}\t#{pane_top}\t#{pane_width}\t#{pane_height}\t#{pane_active}\t#{@dsh_role}'",
@@ -301,7 +302,12 @@ export class TmuxControlClient extends EventEmitter<Events> {
     const sessions = await this.listSessions(this.tmuxBin)
     const viewers = await this.countViewers().catch(() => 0)
     const fromList = list.trim() === '' ? [] : list.trim().split('\n').map(parsePaneLine)
-    const panes = mergePanes(fromList, safeParse(layout ?? ''))
+    const zoomed = zoomedFlag === '1'
+    // tmux keeps reporting hidden panes with their pre-zoom coordinates. The
+    // visible layout is authoritative: in zoom mode only the active pane is
+    // actually on screen, occupying the full window.
+    const visiblePanes = zoomed ? fromList.filter((pane) => pane.active) : fromList
+    const panes = mergePanes(visiblePanes, safeParse(visibleLayout ?? ''))
     const windows: WindowInfo[] = windowsRaw.trim() === '' ? [] : windowsRaw.trim().split('\n').map((line) => {
       const [id, index, name, active] = line.split('\t')
       return { id: id ?? '', index: Number(index) || 0, name: name ?? '', active: active === '1' }
@@ -312,6 +318,7 @@ export class TmuxControlClient extends EventEmitter<Events> {
       windowName: windowName ?? '',
       cols: Number(w) || 80,
       rows: Number(h) || 24,
+      zoomed,
       panes,
       sessions,
       windows,

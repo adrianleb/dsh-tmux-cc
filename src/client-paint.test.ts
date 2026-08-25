@@ -23,18 +23,19 @@ test('client bundle invariants', () => {
   assert.match(src, /type: 'resize'/)
   assert.match(src, /reportDockGrid/)
   assert.match(src, /sizeMode/)
-  // Mobile: a real narrow breakpoint, full-screen drawer, visual keyboard inset,
-  // and one readable active pane selected through pane tabs.
+  // Mobile: a real narrow breakpoint and full-screen drawer with visual
+  // keyboard insets, while preserving the actual tmux pane grid.
   assert.match(src, /NARROW_MAX_WIDTH = 768/)
   assert.match(src, /@media \(max-width:767px\)/)
   assert.match(src, /window\.visualViewport/)
   assert.match(src, /vv\.height \+ \(vv\.offsetTop/)
-  assert.match(src, /data-tmux-cc-pane-tabs/)
-  assert.match(src, /data-tmux-cc-pane-tab/)
   assert.match(src, /prefs\.open && !isNarrowViewport\(\)/)
   assert.match(src, /data-mobile="1"/)
-  // Inline tmux geometry must not survive when a mobile pane becomes active.
-  assert.match(src, /left:0 !important;top:0 !important;width:100% !important;height:100% !important/)
+  assert.doesNotMatch(src, /data-tmux-cc-pane-tabs/)
+  assert.doesNotMatch(src, /\[data-tmux-cc-pane\]\{display:none\}/)
+  // Zoom is native tmux behavior, not a client-side single-pane invention.
+  assert.match(src, /data-tmux-cc-zoom/)
+  assert.match(src, /type: 'zoom', pane: pane\.id/)
   // IME composition keys must never trigger tmux shortcuts.
   assert.match(src, /event\.isComposing \|\| event\.keyCode === 229/)
 })

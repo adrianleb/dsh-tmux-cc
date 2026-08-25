@@ -36,7 +36,7 @@ const noSessions = async (): Promise<SessionInfo[]> => []
 function scriptedAttach(fake: FakeTransport): void {
   fake.autoRespond = (line) => {
     if (line.includes('client_name')) return 'client-me'
-    if (line.startsWith('display-message')) return '@1\tmain\t120\t36\tb25d,120x36,0,0,5\tverify'
+    if (line.startsWith('display-message')) return '@1\tmain\t120\t36\tb25d,120x36,0,0,5\t0\tverify'
     if (line.startsWith('list-panes')) return '%5\t0\tshell\t0\t0\t120\t35\t1\t'
     if (line.startsWith('list-windows')) return '@1\t0\tmain\t1'
     if (line.startsWith('list-clients')) return 'client-me\tattached,focused,control-mode,ignore-size,UTF-8'
@@ -73,10 +73,46 @@ test('attach survives the unsolicited guard block and parses the snapshot', asyn
   assert.ok(snap)
   assert.equal(snap.cols, 120)
   assert.equal(snap.rows, 36)
+  assert.equal(snap.zoomed, false)
   assert.equal(snap.panes.length, 1)
   assert.equal(snap.panes[0].id, '%5')
   assert.equal(snap.viewers, 0)
   assert.deepEqual(histories, [['%5', 'hello world\r\n']])
+})
+
+test('native tmux zoom exposes only the full-window visible pane', async () => {
+  const fake = new FakeTransport()
+  scriptedAttach(fake)
+  const client = makeClient(fake)
+  const attachPromise = client.attach('verify')
+  fake.feed('%begin 1 99 0\n%end 1 99 0\n')
+  await attachPromise
+
+  fake.autoRespond = (line) => {
+    if (line.startsWith('resize-pane')) return ''
+    if (line.startsWith('display-message')) return '@1\tmain\t120\t36\tbd20,120x36,0,0,8\t1\tverify'
+    if (line.startsWith('list-panes')) {
+      return [
+        '%5\t0\tshell\t0\t0\t59\t17\t0\t',
+        '%6\t1\ttests\t60\t0\t60\t17\t0\t',
+        '%7\t2\trelease\t0\t18\t59\t18\t0\t',
+        '%8\t3\tmetrics\t0\t0\t120\t36\t1\t',
+      ].join('\n')
+    }
+    if (line.startsWith('list-windows')) return '@1\t0\tmain\t1'
+    if (line.startsWith('list-clients')) return 'client-me\tattached,control-mode,ignore-size,UTF-8'
+    return ''
+  }
+
+  await client.zoom('%8')
+  const snap = client.currentSnapshot()
+  assert.ok(snap)
+  assert.equal(snap.zoomed, true)
+  assert.equal(snap.panes.length, 1)
+  assert.deepEqual(
+    { id: snap.panes[0].id, left: snap.panes[0].left, top: snap.panes[0].top, width: snap.panes[0].width, height: snap.panes[0].height },
+    { id: '%8', left: 0, top: 0, width: 120, height: 36 },
+  )
 })
 
 test('viewer counting: self and ignore-size docks excluded, iTerm -CC seats counted', async () => {

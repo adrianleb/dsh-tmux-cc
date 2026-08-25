@@ -18,12 +18,13 @@ A persistent **tmux control-mode cockpit** for DeepSeek Harness Web. It attaches
 </p>
 
 <p align="center">
-  <img src="./assets/dsh-tmux-cc-mobile.png" alt="dsh-tmux-cc responsive mobile cockpit with pane tabs" width="360" />
-  <br /><sub>Mobile cockpit: full-screen drawer with one readable pane and touch-friendly pane switching.</sub>
+  <img src="./assets/dsh-tmux-cc-mobile.png" alt="dsh-tmux-cc mobile cockpit preserving the complete four-pane tmux grid" width="360" />
+  <img src="./assets/dsh-tmux-cc-mobile-zoom.png" alt="dsh-tmux-cc mobile cockpit after native tmux pane zoom" width="360" />
+  <br /><sub>Mobile cockpit: the real tmux grid (left), then the selected Metrics pane after native tmux zoom (right).</sub>
 </p>
 
 > [!NOTE]
-> Both screenshots were generated from an isolated DSH profile and a dedicated tmux server containing synthetic demo data only. They do not contain private conversations, workspaces, or terminal output.
+> All screenshots were generated from an isolated DSH profile and a dedicated tmux server containing synthetic demo data only. They do not contain private conversations, workspaces, or terminal output.
 
 ## Features
 
@@ -32,7 +33,7 @@ A persistent **tmux control-mode cockpit** for DeepSeek Harness Web. It attaches
 - **Non-disruptive sizing** — mirror mode uses `ignore-size` while another terminal is attached; takeover mode provides a crisp 1:1 grid when the dock is the only sizing client.
 - **Safe input transport** — input is forwarded byte-for-byte through hex-encoded `send-keys -H`, including Enter, paste, and Unicode.
 - **Multiple sessions and windows** — attach, detach, switch windows, or launch an optional named session recipe.
-- **Responsive mobile cockpit** — below 768px the dock becomes a full-screen drawer with touch-friendly controls and one readable active pane.
+- **Faithful mobile cockpit** — below 768px the dock becomes a full-screen drawer while preserving the real tmux pane grid and native pane zoom.
 - **Bilingual UI** — English and Simplified Chinese follow the DSH locale.
 - **No native dependencies** — the control channel uses plain stdin/stdout pipes.
 
@@ -84,10 +85,11 @@ The plugin refuses to kill the final pane in a session.
 At viewport widths below 768px, the cockpit follows the narrow-layout pattern established by dsh-better-sidebar:
 
 - The dock becomes a full-screen floating drawer and stops pushing the DSH conversation layout.
-- Window tabs and pane tabs get dedicated scrollable rows. Only the active tmux pane is shown, using the full remaining screen; tap another pane tab to switch.
+- Every tmux pane stays visible in its real tmux grid position; there is no separate client-side pane-tab or single-pane mode.
+- Tap a pane to focus it, then use the toolbar zoom button or `Ctrl+B z`. This sends tmux's native `resize-pane -Z`; tapping it again restores the grid. Double-clicking a pane title performs the same native toggle.
 - Dock and pane resize handles are disabled, the desktop side selector is hidden, and primary controls use 44px touch targets.
 - Safe-area padding supports notched devices, while `visualViewport` resize/scroll tracking keeps the terminal above the on-screen keyboard.
-- At 768px and wider, the complete desktop tmux layout and resize controls return automatically.
+- At 768px and wider, the complete desktop layout and resize controls return automatically.
 
 ## Sizing model
 

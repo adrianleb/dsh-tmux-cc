@@ -6,6 +6,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.5.0]
+
+### Changed
+
+- Removed the client-side mobile pane tabs and single-pane rendering mode; mobile now preserves the complete native tmux pane grid.
+- Pane zoom now uses tmux's normal `resize-pane -Z` toggle from the toolbar, `Ctrl+B z`, or a double-clicked pane title.
+- Reduced the mobile toolbar to three rows so the tmux grid receives more vertical space.
+- Replaced every public screenshot with visually reviewed synthetic captures, including separate mobile grid and native-zoom states.
+
+### Fixed
+
+- Snapshot parsing now uses `window_visible_layout` and `window_zoomed_flag`, filtering tmux's hidden pre-zoom panes so a natively zoomed pane occupies the exact full cockpit body.
+- The zoom button now exposes and displays the real tmux zoom state.
+
 ## [0.4.1]
 
 ### Fixed
@@ -51,7 +65,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Switched input to byte-safe, hex-encoded `send-keys -H` commands.
 - Paired control replies by tmux block tags and added command timeouts.
 
-[Unreleased]: https://github.com/adrianleb/dsh-tmux-cc/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/adrianleb/dsh-tmux-cc/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/adrianleb/dsh-tmux-cc/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/adrianleb/dsh-tmux-cc/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/adrianleb/dsh-tmux-cc/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/adrianleb/dsh-tmux-cc/releases/tag/v0.3.0

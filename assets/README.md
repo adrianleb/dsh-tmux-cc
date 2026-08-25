@@ -9,4 +9,4 @@ They were captured from:
 - a synthetic `showcase` session containing generated API, test, release, and metrics output;
 - a blank demonstration workspace with no private conversations or files.
 
-Before capture, the browser checks the expected synthetic session name, pane count, responsive layout, and absence of horizontal overflow. The mobile capture uses a 390×844 CSS viewport and verifies that the 768px boundary restores the desktop pane layout.
+Before capture, the browser checks the expected synthetic session name, pane count, responsive layout, and absence of horizontal overflow. At a 390×844 CSS viewport it verifies that all four panes remain visible in the real tmux grid, focuses the bottom-right Metrics pane, toggles native tmux zoom, checks that the one visible pane exactly matches the cockpit body, unzooms back to four panes, and confirms that the 768px boundary restores desktop behavior.

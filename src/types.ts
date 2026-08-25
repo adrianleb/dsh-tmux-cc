@@ -63,6 +63,7 @@ export interface Snapshot {
   windowName: string
   cols: number
   rows: number
+  zoomed: boolean
   attached: boolean
   error?: string
   panes: PaneInfo[]
