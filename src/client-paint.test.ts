@@ -38,6 +38,15 @@ test('client bundle invariants', () => {
   assert.match(src, /type: 'resize'/)
   assert.match(src, /reportDockGrid/)
   assert.match(src, /sizeMode/)
+  // System fonts: xterm prefers Berkeley Mono (and other local families)
+  // instead of a hardcoded ui-monospace stack, and Settings can apply the
+  // same stack to DSH's code-font CSS variables.
+  assert.match(src, /Berkeley Mono/)
+  assert.match(src, /function termFontFamily\(/)
+  assert.match(src, /function applyHarnessFont\(/)
+  assert.match(src, /applyFontToHarness/)
+  assert.match(src, /--ds-font-family-code/)
+  assert.match(src, /queryLocalFonts/)
   // Mobile: a real narrow breakpoint and full-screen drawer with visual
   // keyboard insets, while preserving the actual tmux pane grid.
   assert.match(src, /NARROW_MAX_WIDTH = 768/)

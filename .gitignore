@@ -21,3 +21,9 @@ coverage/
 
 # Private development notes
 REVIEW.md
+
+# Local audit/test overlays
+.audit/
+
+# Local screen recordings
+ScreenRecording*

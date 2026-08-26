@@ -58,7 +58,7 @@ pnpm run check
 dsh plugin --profile web add "$PWD"
 ```
 
-重启当前的 `dsh web` 进程，然后强制刷新 Web 页面。右上角会出现 **tmux** 按钮；**设置 → tmux** 中也提供了简要说明和打开工作台的入口。
+重启当前的 `dsh web` 进程，然后强制刷新 Web 页面。右下角会出现 **tmux** 悬浮按钮；**设置 → tmux** 中会显示工作台的实时状态，并提供另一个打开入口。
 
 更新方法：
 
@@ -99,6 +99,34 @@ pnpm run check
 - **接管（Takeover）** —— 当前只有 `ignore-size` 客户端。工作台通过 `refresh-client -C` 上报可用网格，并按原生字体大小渲染。
 
 打开其他 tmux 客户端后，工作台会退回镜像模式；关闭后则恢复接管模式。
+
+## 字体
+
+tmux-cc 用浏览器里的 **xterm.js** 绘制，因此只能使用 *正在浏览 GUI 的那台电脑* 上已安装的字体（或通过 `@font-face` 下发的字体）。DSH 主机上的字体不会自动出现在远程浏览器中。
+
+字体设置为空时，工作台会按下面的栈回退，浏览器会选用它能解析的第一个家族：
+
+`Berkeley Mono Nerd Font Mono`、`Berkeley Mono`、`JetBrainsMono Nerd Font Mono`、`FiraCode Nerd Font Mono`、`Hack Nerd Font Mono`，然后是 `ui-monospace`。
+
+若已安装 Berkeley Mono，浏览器里的家族名通常是 `Berkeley Mono` 和 `Berkeley Mono Nerd Font Mono`（窗格里如果有 nerd/powerline 符号，Nerd 版本更合适）。
+
+可在 **设置 → tmux → 终端字体** 填写自定义栈，例如：
+
+```text
+"Berkeley Mono", "Berkeley Mono Nerd Font Mono", ui-monospace, monospace
+```
+
+留空则继续用默认栈。在 Chromium 中，聚焦输入框时还可以通过 Local Font Access API 列出本机字体。
+
+可选勾选 **同时用于 DSH 代码字体**，以设置 `--ds-font-family-code`（以及 `--dsw-font-mono`），让 Markdown、工具输出、以及跟随主题等宽字体的侧栏终端使用同一字体。这不会改掉整个 DSH 界面；若也要改 UI 无衬线字体，可通过 dsh-better-sidebar 的 **自定义** 方案注入：
+
+```css
+:root {
+  --dsw-font-family: "Berkeley Mono", ui-sans-serif, system-ui, sans-serif;
+}
+```
+
+dsh-better-sidebar 侧栏终端设置里还有单独的 **终端字体** 项，只作用于侧栏 PTY 标签，不会影响本 tmux 工作台。
 
 ## 配置
 

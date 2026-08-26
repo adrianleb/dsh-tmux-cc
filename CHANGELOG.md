@@ -4,7 +4,40 @@ All notable changes to dsh-tmux-cc are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.5.2] - 2026-08-26
+
+### Added
+
+- Terminal panes prefer system monospace fonts installed on the viewing machine (Berkeley Mono and common Nerd Font cuts first). Settings → tmux can override the CSS `font-family` stack, list local fonts in Chromium, and optionally apply the same stack to DSH's `--ds-font-family-code`.
+
+### Changed
+
+- The launcher trigger is now a floating button in the bottom-right corner, clearing the top-right header cluster used by other plugins.
+- Kill-pane from pointer controls (toolbar button, per-pane close) now arms first and confirms on a second tap within 3 seconds; keyboard-prefix kills stay instant.
+- Pane toolbar actions (split, zoom, kill) are disabled while detached instead of failing silently.
+- A single tmux window no longer renders a one-tab window strip, reclaiming a toolbar row on mobile.
+- The Settings section now shows live attach state, session, pane count, and sizing mode, plus a shortcut reference and a styled open/hide button.
+- Active pane focus now uses the interactive accent color, and the active pane title brightens.
+- The dock sits below DSH's dialog overlay layer, so modals cover and intercept it.
+
+### Removed
+
+- The "Keep across chats" pin toggle: the dock is always persistent and the flag had no behavior attached.
+
+### Fixed
+
+- Multiple connected browsers no longer fight over the shared tmux window: every viewer reports its dock grid and takeover follows tmux's own multi-client rule, sizing the window to the smallest reporting viewer (min cols, min rows), recomputed when a viewer disconnects. A phone opening the dock previously kept resetting the desktop's window and vice versa.
+- Terminal panes now scroll on touch devices: a one-finger vertical drag moves through scrollback unless the pane program has mouse reporting enabled, in which case the drag is left to the program.
+- Pane terminals no longer show a permanent scrollbar column stealing narrow columns; wheel and touch scrolling are unchanged.
+- Terminals follow live theme changes; switching between light and dark no longer leaves xterm rendering with stale colors.
+- Detach no longer fights the auto-attach retry and immediately re-attaches; a manual detach now sticks until the user attaches again.
+- The right-side dock toolbar no longer overflows at the minimum width: Close moved to the top row and is always reachable, and the actions row scrolls horizontally when narrow.
+- Dock size is persisted unclamped, so visiting from a small screen no longer shrinks the restored size on larger screens.
+- Font fitting quantizes down instead of rounding, ending clipped first/last terminal lines; the grid probe row height now matches xterm's ~1.2x native row, reducing vertical letterboxing.
+- Escape hides the dock when the last interaction was inside it, without stealing Escape from terminal programs or open dropdowns.
+- Dock and pane resize handles now have a visible pill affordance and `touch-action: none`.
+- Session and dock-side selects are styled with borders and a real chevron instead of a bare native control.
+- Toolbar buttons and the launcher expose `aria-label`s, and focus rings use the interactive accent.
 
 ## [0.5.1]
 

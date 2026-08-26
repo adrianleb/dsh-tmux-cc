@@ -58,7 +58,7 @@ pnpm run check
 dsh plugin --profile web add "$PWD"
 ```
 
-Restart the existing `dsh web` process, then hard-refresh the Web GUI. A **tmux** button will appear in the upper-right corner; **Settings → tmux** provides a short description and another way to open the dock.
+Restart the existing `dsh web` process, then hard-refresh the Web GUI. A **tmux** button will appear in the bottom-right corner; **Settings → tmux** shows the dock's live state and another way to open it.
 
 To update:
 
@@ -99,6 +99,34 @@ The mode changes automatically and is re-evaluated every five seconds:
 - **Takeover** — only `ignore-size` clients are present. The dock reports its available grid with `refresh-client -C` and renders at the native font size.
 
 Opening another tmux client moves the dock back to mirror mode; closing it returns the dock to takeover mode.
+
+## Fonts
+
+tmux-cc renders with **xterm.js in the browser**, so it can only use fonts installed on the computer *viewing* the GUI (or fonts served as `@font-face`). Fonts on the DSH host do not automatically appear in a remote browser.
+
+With an empty font setting, the dock prefers this stack and lets CSS fall through to the first family the browser can resolve:
+
+`Berkeley Mono Nerd Font Mono`, `Berkeley Mono`, `JetBrainsMono Nerd Font Mono`, `FiraCode Nerd Font Mono`, `Hack Nerd Font Mono`, then `ui-monospace`.
+
+If Berkeley Mono is installed, the browser family names are typically `Berkeley Mono` and `Berkeley Mono Nerd Font Mono` (the Nerd cut is better if panes use powerline/nerd glyphs).
+
+Set a custom stack in **Settings → tmux → Terminal font**, for example:
+
+```text
+"Berkeley Mono", "Berkeley Mono Nerd Font Mono", ui-monospace, monospace
+```
+
+Leave the field empty to keep the default stack. Chromium can also list installed families via the Local Font Access API when you focus the input.
+
+Optionally tick **Also use this font for DSH code** to set `--ds-font-family-code` (and `--dsw-font-mono`) so markdown, tool output, and sidebar terminals that follow the theme monospace pick up the same family. That does not restyle the whole DSH chrome; to change the UI sans-serif as well, inject CSS (dsh-better-sidebar **custom** scheme) such as:
+
+```css
+:root {
+  --dsw-font-family: "Berkeley Mono", ui-sans-serif, system-ui, sans-serif;
+}
+```
+
+dsh-better-sidebar also has its own **Terminal font family** field under the side-card terminal settings; that applies only to sidebar PTY tabs, not to this tmux dock.
 
 ## Configuration
 

@@ -3,6 +3,7 @@ import { promisify } from 'node:util'
 import { TmuxControlClient, listSessionsCli, type TmuxSnapshot } from './tmux-client.ts'
 import {
   DEFAULT_PREFS,
+  sanitizeFontFamily,
   type ClientToHost,
   type DockPrefs,
   type HostToClient,
@@ -31,8 +32,14 @@ export class TmuxRuntime {
   private client: TmuxControlClient | null = null
   private prefs: DockPrefs = { ...DEFAULT_PREFS }
   private sockets = new Set<SocketLike>()
-  /** Dock grid the browser last asked for (used only in takeover mode). */
-  private desiredSize: { cols: number; rows: number } | null = null
+  /**
+   * Dock grids reported by each browser client. Multiple devices share one
+   * tmux control client, so takeover follows tmux's own multi-client rule:
+   * the window is sized to the smallest reporting viewer (min cols, min
+   * rows). A single `desiredSize` slot let the last reporter win, making
+   * e.g. a phone and a desktop ping-pong the window geometry.
+   */
+  private desiredSizes = new Map<SocketLike, { cols: number; rows: number }>()
   private sizeMode: 'mirror' | 'takeover' = 'mirror'
   private appliedSize = ''
   private viewerPoll: ReturnType<typeof setInterval> | null = null
@@ -58,8 +65,9 @@ export class TmuxRuntime {
     if (!Number.isFinite(size)) next.size = next.side === 'right' ? 360 : 280
     else next.size = Math.max(120, Math.min(3000, Math.round(size)))
     next.open = next.open === true
-    next.pinned = next.pinned !== false
     next.session = typeof next.session === 'string' ? next.session : ''
+    next.fontFamily = sanitizeFontFamily(next.fontFamily)
+    next.applyFontToHarness = next.applyFontToHarness === true
     this.prefs = next
     this.broadcast({ type: 'prefs', prefs: this.prefs }, sender)
     return this.prefs
@@ -131,21 +139,35 @@ export class TmuxRuntime {
       }
       return
     }
-    if (this.desiredSize === null) return
+    const desiredSize = this.effectiveSize()
+    if (desiredSize === null) return
     if (this.sizeMode !== 'takeover') {
       this.sizeMode = 'takeover'
       await client.setIgnoreSize(false)
     }
-    const key = `${this.desiredSize.cols}x${this.desiredSize.rows}`
+    const key = `${desiredSize.cols}x${desiredSize.rows}`
     if (this.appliedSize !== key) {
       this.appliedSize = key
-      await client.setClientSize(this.desiredSize.cols, this.desiredSize.rows)
+      await client.setClientSize(desiredSize.cols, desiredSize.rows)
     }
+  }
+
+  /** The grid every reporting viewer can display: min of cols and rows. */
+  private effectiveSize(): { cols: number; rows: number } | null {
+    if (this.desiredSizes.size === 0) return null
+    let cols = Infinity
+    let rows = Infinity
+    for (const size of this.desiredSizes.values()) {
+      cols = Math.min(cols, size.cols)
+      rows = Math.min(rows, size.rows)
+    }
+    return { cols, rows }
   }
 
   private resetSizeState(): void {
     this.sizeMode = 'mirror'
     this.appliedSize = ''
+    this.desiredSizes.clear()
     if (this.viewerPoll) clearInterval(this.viewerPoll)
     this.viewerPoll = null
   }
@@ -182,6 +204,13 @@ export class TmuxRuntime {
     })
     socket.on('close', () => {
       this.sockets.delete(socket)
+      // A departing viewer may unblock a larger shared grid.
+      if (this.desiredSizes.delete(socket)) {
+        const snap = this.client?.currentSnapshot()
+        if (snap && this.client?.attached) {
+          void this.applySizePolicy(snap).catch(() => { /* transient */ })
+        }
+      }
     })
   }
 
@@ -276,7 +305,7 @@ export class TmuxRuntime {
       const cols = Number(msg.cols)
       const rows = Number(msg.rows)
       if (Number.isFinite(cols) && Number.isFinite(rows)) {
-        this.desiredSize = { cols: Math.floor(cols), rows: Math.floor(rows) }
+        this.desiredSizes.set(socket, { cols: Math.floor(cols), rows: Math.floor(rows) })
         const snap = this.client?.currentSnapshot()
         if (snap && this.client?.attached) await this.applySizePolicy(snap)
       }

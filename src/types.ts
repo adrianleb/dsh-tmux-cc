@@ -18,18 +18,37 @@ export interface LayoutInfo {
 
 export interface DockPrefs {
   open: boolean
-  pinned: boolean
   side: 'bottom' | 'right'
   size: number
   session: string
+  /**
+   * CSS `font-family` stack for xterm panes. Empty uses the client default,
+   * which prefers Berkeley Mono and other fonts installed on the viewing machine.
+   */
+  fontFamily: string
+  /**
+   * When true, the client also sets DSH's `--ds-font-family-code` (and
+   * `--dsw-font-mono`) to the resolved terminal stack so code in the harness
+   * follows the same system font.
+   */
+  applyFontToHarness: boolean
 }
 
 export const DEFAULT_PREFS: DockPrefs = {
   open: false,
-  pinned: true,
   side: 'bottom',
   size: 280,
   session: '',
+  fontFamily: '',
+  applyFontToHarness: false,
+}
+
+/** Reject CSS-breaking characters; font-family may contain quotes and commas. */
+export function sanitizeFontFamily(value: unknown): string {
+  if (typeof value !== 'string') return ''
+  const s = value.trim()
+  if (!s || s.length > 300 || /[{}<>;\n\r]/.test(s)) return ''
+  return s
 }
 
 export interface PaneInfo {
