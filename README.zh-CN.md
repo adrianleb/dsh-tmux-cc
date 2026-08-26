@@ -49,7 +49,13 @@
 
 ## 安装
 
-从 GitHub 安装（目录收录与一键安装）：
+从 npm 安装（推荐，预构建）：
+
+```bash
+dsh plugin --profile web add dsh-tmux-cc
+```
+
+从 GitHub 安装：
 
 ```bash
 dsh plugin --profile web add github:adrianleb/dsh-tmux-cc
