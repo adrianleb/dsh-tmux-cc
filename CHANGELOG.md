@@ -4,6 +4,12 @@ All notable changes to dsh-tmux-cc are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.5.3] - 2026-08-26
+
+### Fixed
+
+- Pane fitting now accounts for xterm rounding each row up to whole device pixels: a line height that "exactly" filled a pane could still clip the last terminal row, cutting the bottom frame line of full-screen TUIs in mirror mode. The fitter steps the font down until the integer-rounded grid provably fits.
+
 ## [0.5.2] - 2026-08-26
 
 ### Added

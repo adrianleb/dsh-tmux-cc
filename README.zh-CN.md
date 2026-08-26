@@ -13,18 +13,19 @@
 ## 界面预览
 
 <p align="center">
-  <img src="./assets/dsh-tmux-cc-desktop.png" alt="dsh-tmux-cc 桌面工作台与四个合成终端窗格" width="100%" />
-  <br /><sub>桌面工作台：原生 tmux 布局、窗口标签和自适应接管尺寸。</sub>
+  <img src="./assets/dsh-tmux-cc-desktop.png" alt="dsh-tmux-cc 桌面工作台并排显示 btop、Claude Code、Codex、CI 日志、omp 和 README 卡片" width="100%" />
+  <br /><sub>桌面工作台：六个实时窗格（btop、Claude Code、Codex、滚动 CI 日志、omp、项目 README）组成原生 tmux 网格，以镜像模式呈现、不抢占窗口尺寸。</sub>
 </p>
 
 <p align="center">
+  <img src="./assets/dsh-tmux-cc-desktop-right.png" alt="dsh-tmux-cc 右侧边栏模式纵向叠放 Claude Code、Codex 和 omp" width="360" />
   <img src="./assets/dsh-tmux-cc-mobile.png" alt="dsh-tmux-cc 移动工作台保留完整四窗格 tmux 网格" width="360" />
   <img src="./assets/dsh-tmux-cc-mobile-zoom.png" alt="dsh-tmux-cc 移动工作台使用原生 tmux 窗格缩放" width="360" />
-  <br /><sub>移动工作台：真实 tmux 网格（左），以及使用原生 tmux 缩放后的 Metrics 窗格（右）。</sub>
+  <br /><sub>右侧边栏模式叠放三个编程 CLI（左）；移动工作台：真实 tmux 网格与原生窗格缩放（中、右）。</sub>
 </p>
 
 > [!NOTE]
-> 所有截图均来自完全隔离的 DSH profile 和独立 tmux server，其中只有合成演示数据，不包含任何私人对话、工作区或终端输出。
+> 所有截图均来自完全隔离的 DSH profile 和独立 tmux server。截图中的 agent CLI 均停留在欢迎界面，从未发送任何提示词；画面不包含私人对话、工作区或终端输出。
 
 ## 功能特性
 

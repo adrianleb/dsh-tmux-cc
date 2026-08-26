@@ -13,18 +13,19 @@ A persistent **tmux control-mode cockpit** for DeepSeek Harness Web. It attaches
 ## Preview
 
 <p align="center">
-  <img src="./assets/dsh-tmux-cc-desktop.png" alt="dsh-tmux-cc desktop cockpit with four synthetic terminal panes" width="100%" />
-  <br /><sub>Desktop cockpit: native tmux layout, window tabs, and adaptive takeover sizing.</sub>
+  <img src="./assets/dsh-tmux-cc-desktop.png" alt="dsh-tmux-cc desktop cockpit showing btop, Claude Code, Codex, a CI log, omp, and a README card side by side" width="100%" />
+  <br /><sub>Desktop cockpit: six live panes — btop, Claude Code, Codex, a rolling CI log, omp, and a project README — in one native tmux grid, mirrored without stealing window size.</sub>
 </p>
 
 <p align="center">
+  <img src="./assets/dsh-tmux-cc-desktop-right.png" alt="dsh-tmux-cc as a right sidebar with Claude Code, Codex, and omp stacked" width="360" />
   <img src="./assets/dsh-tmux-cc-mobile.png" alt="dsh-tmux-cc mobile cockpit preserving the complete four-pane tmux grid" width="360" />
   <img src="./assets/dsh-tmux-cc-mobile-zoom.png" alt="dsh-tmux-cc mobile cockpit after native tmux pane zoom" width="360" />
-  <br /><sub>Mobile cockpit: the real tmux grid (left), then the selected Metrics pane after native tmux zoom (right).</sub>
+  <br /><sub>Right-sidebar mode with three coding CLIs (left); mobile cockpit with the real tmux grid and native pane zoom (center, right).</sub>
 </p>
 
 > [!NOTE]
-> All screenshots were generated from an isolated DSH profile and a dedicated tmux server containing synthetic demo data only. They do not contain private conversations, workspaces, or terminal output.
+> All screenshots were generated from an isolated DSH profile and a dedicated tmux server containing synthetic demo data only. No prompts were ever sent to the agent CLIs shown; they sit at their welcome screens. Nothing pictured contains private conversations, workspaces, or terminal output.
 
 ## Features
 
