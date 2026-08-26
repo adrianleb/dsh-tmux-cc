@@ -6,7 +6,7 @@ They were captured from:
 
 - an isolated `DSH_HOME` with a fresh Web profile;
 - a dedicated tmux server socket, separate from the maintainer's normal tmux server;
-- a synthetic `showcase` session containing generated API, test, release, and metrics output (mobile captures);
+- a synthetic `cockpit` session of generated request logs, test results, sparkline metrics, and a release checklist streaming at the dock's native mobile grid (mobile captures; takeover mode sizes the window to the phone's grid);
 - a `cockpit` session of real, locally installed programs at their idle screens — btop (process panel hidden), Claude Code, Codex, and omp — plus a synthetic CI log ticker and a styled project README card, rendered through a fake 220-column pty seat so the dock mirrors without resizing the window (desktop hero capture). Panes that would have shown live infrastructure names (lazyjournal's docker list, herdr's workspaces) were deliberately replaced with synthetic content;
 - a `sidecar` session stacking Claude Code, Codex, and omp for right-sidebar mode (sidebar capture);
 - a blank demonstration workspace with no private conversations or files.
