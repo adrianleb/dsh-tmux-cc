@@ -49,6 +49,14 @@ A persistent **tmux control-mode cockpit** for DeepSeek Harness Web. It attaches
 
 ## Install
 
+From GitHub (catalogs and one-shot installs):
+
+```bash
+dsh plugin --profile web add github:adrianleb/dsh-tmux-cc
+```
+
+Or from a local clone:
+
 ```bash
 git clone https://github.com/adrianleb/dsh-tmux-cc.git
 cd dsh-tmux-cc

@@ -49,6 +49,14 @@
 
 ## 安装
 
+从 GitHub 安装（目录收录与一键安装）：
+
+```bash
+dsh plugin --profile web add github:adrianleb/dsh-tmux-cc
+```
+
+或从本地克隆安装：
+
 ```bash
 git clone https://github.com/adrianleb/dsh-tmux-cc.git
 cd dsh-tmux-cc
