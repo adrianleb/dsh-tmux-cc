@@ -13,15 +13,16 @@ A persistent **tmux control-mode cockpit** for DeepSeek Harness Web. It attaches
 ## Preview
 
 <p align="center">
-  <img src="./assets/dsh-tmux-cc-desktop.png" alt="dsh-tmux-cc desktop cockpit showing btop, Claude Code, Codex, a CI log, omp, and a README card side by side" width="100%" />
-  <br /><sub>Desktop cockpit: six live panes — btop, Claude Code, Codex, a rolling CI log, omp, and a project README — in one native tmux grid, mirrored without stealing window size.</sub>
+  <img src="./assets/dsh-tmux-cc-desktop.png" alt="dsh-tmux-cc desktop cockpit showing btop, Claude Code, Codex, a CI log, omp, and a README card side by side" width="49%" />
+  <img src="./assets/dsh-tmux-cc-desktop-right.png" alt="dsh-tmux-cc as a right sidebar with Claude Code, Codex, and omp stacked" width="49%" />
+  <br /><sub>Desktop: bottom dock with six live panes — btop, Claude Code, Codex, a rolling CI log, omp, and a project README — mirrored without stealing window size (left); right-sidebar mode with three coding CLIs stacked (right).</sub>
 </p>
 
 <p align="center">
-  <img src="./assets/dsh-tmux-cc-desktop-right.png" alt="dsh-tmux-cc as a right sidebar with Claude Code, Codex, and omp stacked" width="360" />
-  <img src="./assets/dsh-tmux-cc-mobile.png" alt="dsh-tmux-cc mobile cockpit preserving the complete four-pane tmux grid" width="360" />
-  <img src="./assets/dsh-tmux-cc-mobile-zoom.png" alt="dsh-tmux-cc mobile cockpit after native tmux pane zoom" width="360" />
-  <br /><sub>Right-sidebar mode with three coding CLIs (left); mobile cockpit with the real tmux grid and native pane zoom (center, right).</sub>
+  <img src="./assets/dsh-tmux-cc-mobile.png" alt="dsh-tmux-cc mobile cockpit preserving the complete four-pane tmux grid" width="300" />
+  &nbsp;&nbsp;
+  <img src="./assets/dsh-tmux-cc-mobile-zoom.png" alt="dsh-tmux-cc mobile cockpit after native tmux pane zoom" width="300" />
+  <br /><sub>Mobile: the full-screen drawer preserves the real four-pane tmux grid (left); native <code>resize-pane -Z</code> zoom on the Metrics pane (right).</sub>
 </p>
 
 > [!NOTE]

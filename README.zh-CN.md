@@ -13,15 +13,16 @@
 ## 界面预览
 
 <p align="center">
-  <img src="./assets/dsh-tmux-cc-desktop.png" alt="dsh-tmux-cc 桌面工作台并排显示 btop、Claude Code、Codex、CI 日志、omp 和 README 卡片" width="100%" />
-  <br /><sub>桌面工作台：六个实时窗格（btop、Claude Code、Codex、滚动 CI 日志、omp、项目 README）组成原生 tmux 网格，以镜像模式呈现、不抢占窗口尺寸。</sub>
+  <img src="./assets/dsh-tmux-cc-desktop.png" alt="dsh-tmux-cc 桌面工作台并排显示 btop、Claude Code、Codex、CI 日志、omp 和 README 卡片" width="49%" />
+  <img src="./assets/dsh-tmux-cc-desktop-right.png" alt="dsh-tmux-cc 右侧边栏模式纵向叠放 Claude Code、Codex 和 omp" width="49%" />
+  <br /><sub>桌面：底部工作台容纳六个实时窗格（btop、Claude Code、Codex、滚动 CI 日志、omp、项目 README），以镜像模式呈现、不抢占窗口尺寸（左）；右侧边栏模式纵向叠放三个编程 CLI（右）。</sub>
 </p>
 
 <p align="center">
-  <img src="./assets/dsh-tmux-cc-desktop-right.png" alt="dsh-tmux-cc 右侧边栏模式纵向叠放 Claude Code、Codex 和 omp" width="360" />
-  <img src="./assets/dsh-tmux-cc-mobile.png" alt="dsh-tmux-cc 移动工作台保留完整四窗格 tmux 网格" width="360" />
-  <img src="./assets/dsh-tmux-cc-mobile-zoom.png" alt="dsh-tmux-cc 移动工作台使用原生 tmux 窗格缩放" width="360" />
-  <br /><sub>右侧边栏模式叠放三个编程 CLI（左）；移动工作台：真实 tmux 网格与原生窗格缩放（中、右）。</sub>
+  <img src="./assets/dsh-tmux-cc-mobile.png" alt="dsh-tmux-cc 移动工作台保留完整四窗格 tmux 网格" width="300" />
+  &nbsp;&nbsp;
+  <img src="./assets/dsh-tmux-cc-mobile-zoom.png" alt="dsh-tmux-cc 移动工作台使用原生 tmux 窗格缩放" width="300" />
+  <br /><sub>移动端：全屏抽屉保留真实的四窗格 tmux 网格（左）；对 Metrics 窗格使用原生 <code>resize-pane -Z</code> 缩放（右）。</sub>
 </p>
 
 > [!NOTE]
