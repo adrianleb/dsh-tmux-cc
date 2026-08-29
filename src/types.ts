@@ -16,16 +16,26 @@ export interface LayoutInfo {
   session: string
 }
 
+/** Browser-local presentation preferences. Never broadcast to other viewers. */
 export interface DockPrefs {
   open: boolean
   side: 'bottom' | 'right'
   size: number
+  /** Last session this browser explicitly selected; attachment itself is shared runtime state. */
   session: string
   /**
    * CSS `font-family` stack for xterm panes. Empty uses the client default,
    * which prefers Berkeley Mono and other fonts installed on the viewing machine.
    */
   fontFamily: string
+  /** Preferred native font size. Mirror mode may shrink it to fit the tmux grid. */
+  fontSize: number
+  cursorStyle: 'block' | 'underline' | 'bar'
+  cursorBlink: boolean
+  /** Retained xterm rows and requested tmux history depth. */
+  scrollbackLines: number
+  /** Require an explicit second action before sending kill-pane. */
+  confirmKill: boolean
   /**
    * When true, the client also sets DSH's `--ds-font-family-code` (and
    * `--dsw-font-mono`) to the resolved terminal stack so code in the harness
@@ -40,7 +50,28 @@ export const DEFAULT_PREFS: DockPrefs = {
   size: 280,
   session: '',
   fontFamily: '',
+  fontSize: 12,
+  cursorStyle: 'block',
+  cursorBlink: true,
+  scrollbackLines: 2000,
+  confirmKill: true,
   applyFontToHarness: false,
+}
+
+export type SizePolicy = 'auto' | 'mirror'
+
+/** Host-shared durable settings; these affect the one shared tmux control client. */
+export interface TmuxSettings {
+  sizePolicy: SizePolicy
+}
+
+export const DEFAULT_SETTINGS: TmuxSettings = {
+  sizePolicy: 'auto',
+}
+
+/** Compatibility surface for the legacy /prefs endpoint. */
+export interface RuntimePrefs {
+  session: string
 }
 
 /** Reject CSS-breaking characters; font-family may contain quotes and commas. */
@@ -96,12 +127,15 @@ export interface Snapshot {
    * takeover: nobody else cares; the dock dictates the window size.
    */
   sizeMode: 'mirror' | 'takeover'
+  /** Effective host-wide policy controlling whether this plugin may take over sizing. */
+  sizePolicy: SizePolicy
 }
 
 export type ClientToHost =
   | { type: 'hello' }
   | { type: 'input'; pane: string; data: string }
   | { type: 'resize'; cols: number; rows: number }
+  | { type: 'resize'; active: false }
   | { type: 'select'; pane: string }
   | { type: 'zoom'; pane?: string }
   | { type: 'split'; dir: 'h' | 'v' }
@@ -112,12 +146,10 @@ export type ClientToHost =
   | { type: 'select-window'; windowId: string }
   | { type: 'detach' }
   | { type: 'refresh' }
-  | { type: 'capture' }
-  | { type: 'prefs'; prefs: Partial<DockPrefs> }
+  | { type: 'capture'; pane?: string; lines?: number }
 
 export type HostToClient =
   | { type: 'snapshot'; snapshot: Snapshot }
   | { type: 'output'; pane: string; data: string }
   | { type: 'history'; pane: string; data: string }
-  | { type: 'prefs'; prefs: DockPrefs }
   | { type: 'error'; message: string }

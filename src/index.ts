@@ -4,12 +4,27 @@ import { fileURLToPath } from 'node:url'
 import { WebSocket, WebSocketServer } from 'ws'
 import type { IncomingMessage } from 'node:http'
 import type { Duplex } from 'node:stream'
+import type { Context } from '@deepseek-ai/cordis'
+import z from '@deepseek-ai/schemastery'
+import { installSettingsSection, settingsNamespace } from '@deepseek-ai/dsh-settings'
 import { TmuxRuntime } from './runtime.ts'
 import { isTrustedApiRequest, isTrustedWebSocketRequest } from './trust.ts'
-import { DEFAULT_PREFS, type DockPrefs, type LayoutSpec } from './types.ts'
+import {
+  DEFAULT_PREFS,
+  DEFAULT_SETTINGS,
+  type LayoutSpec,
+  type RuntimePrefs,
+  type SizePolicy,
+  type TmuxSettings,
+} from './types.ts'
 
 export const name = 'tmux-cc'
 export const inject = ['webServer']
+
+export const TMUX_SETTINGS_NAMESPACE = settingsNamespace('tmux-cc')
+export const TMUX_SETTINGS_SCHEMA = z.object({
+  sizePolicy: z.union(['auto', 'mirror']).default(DEFAULT_SETTINGS.sizePolicy),
+})
 
 interface HttpReq {
   url?: string
@@ -34,6 +49,8 @@ interface WebRuntime {
 
 interface PluginConfig {
   tmuxBin?: string
+  /** Composition default for the host-wide sizing policy. */
+  sizePolicy?: SizePolicy
   /** Named session recipes; `launch` runs when the session is missing. */
   layouts?: LayoutSpec[]
 }
@@ -42,10 +59,25 @@ export function apply(
   ctx: { effect: (fn: () => () => void, name?: string) => void; webServer: WebServer; get: (name: string) => unknown },
   config: PluginConfig = {},
 ) {
+  const baseSettings: TmuxSettings = {
+    sizePolicy: config.sizePolicy === 'mirror' ? 'mirror' : DEFAULT_SETTINGS.sizePolicy,
+  }
+  let settingsSource = () => baseSettings
   const runtime = new TmuxRuntime({
     tmuxBin: config.tmuxBin || process.env.DSH_TMUX_BIN || 'tmux',
     layouts: config.layouts,
+    getSizePolicy: () => settingsSource().sizePolicy,
   })
+  installSettingsSection(
+    ctx as unknown as Context,
+    TMUX_SETTINGS_NAMESPACE,
+    TMUX_SETTINGS_SCHEMA,
+    baseSettings,
+    {
+      setSource(current) { settingsSource = current },
+      onChange() { runtime.settingsChanged() },
+    },
+  )
   const trusted = () => {
     const wr = ctx.get('webRuntime') as WebRuntime | undefined
     return wr?.trustedHosts ?? []
@@ -71,6 +103,7 @@ export function apply(
         ok: true,
         plugin: 'dsh-tmux-cc',
         prefs: runtime.getPrefs(),
+        settings: runtime.getSettings(),
         snapshot: await runtime.snapshot(),
       })
     },
@@ -84,7 +117,7 @@ export function apply(
       if (req.method === 'GET') return json(res, 200, runtime.getPrefs())
       if (req.method !== 'POST') return json(res, 405, { ok: false, error: 'method not allowed' })
       try {
-        const body = await readJson(req) as Partial<DockPrefs>
+        const body = await readJson(req) as Partial<RuntimePrefs>
         json(res, 200, runtime.setPrefs(body))
       } catch (err) {
         const status = err instanceof RequestBodyError ? err.status : 400

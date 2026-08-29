@@ -2,13 +2,13 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { TmuxControlClient, listSessionsCli, type TmuxSnapshot } from './tmux-client.ts'
 import {
-  DEFAULT_PREFS,
-  sanitizeFontFamily,
+  DEFAULT_SETTINGS,
   type ClientToHost,
-  type DockPrefs,
   type HostToClient,
   type LayoutInfo,
   type LayoutSpec,
+  type RuntimePrefs,
+  type SizePolicy,
   type Snapshot,
 } from './types.ts'
 
@@ -17,6 +17,10 @@ const execFileAsync = promisify(execFile)
 export interface RuntimeConfig {
   tmuxBin: string
   layouts?: LayoutSpec[]
+  /** Static composition fallback used when no DSH settings provider is mounted. */
+  sizePolicy?: SizePolicy
+  /** Live settings source supplied by the host settings namespace. */
+  getSizePolicy?: () => SizePolicy
 }
 
 export interface SocketLike {
@@ -29,8 +33,10 @@ export interface SocketLike {
 export class TmuxRuntime {
   private readonly tmuxBin: string
   private readonly layouts: LayoutSpec[]
+  private readonly getSizePolicy: () => SizePolicy
   private client: TmuxControlClient | null = null
-  private prefs: DockPrefs = { ...DEFAULT_PREFS }
+  /** Last selected session only; browser presentation preferences stay local. */
+  private prefs: RuntimePrefs = { session: '' }
   private sockets = new Set<SocketLike>()
   /**
    * Dock grids reported by each browser client. Multiple devices share one
@@ -43,34 +49,56 @@ export class TmuxRuntime {
   private sizeMode: 'mirror' | 'takeover' = 'mirror'
   private appliedSize = ''
   private viewerPoll: ReturnType<typeof setInterval> | null = null
+  /** Serialize and coalesce flag/grid changes so snapshots cannot race modes. */
+  private sizePolicyTask: Promise<void> | null = null
+  private sizePolicyDirty = false
+  private sizePolicyRetry: ReturnType<typeof setTimeout> | null = null
+  private sizePolicyRetryDelay = 250
+  /** Invalidates policy writes that were awaiting a replaced/detached control client. */
+  private attachmentGeneration = 0
+  /** At most one pending capture per socket and one active capture drain globally. */
+  private captureRequests = new Map<SocketLike, { lines?: number; pane?: string }>()
+  private captureTask: Promise<void> | null = null
 
   constructor(config: RuntimeConfig) {
     this.tmuxBin = config.tmuxBin
     this.layouts = config.layouts ?? []
+    const fallback = config.sizePolicy === 'mirror' ? 'mirror' : DEFAULT_SETTINGS.sizePolicy
+    this.getSizePolicy = config.getSizePolicy ?? (() => fallback)
   }
 
-  getPrefs(): DockPrefs {
-    return this.prefs
+  getPrefs(): RuntimePrefs {
+    return { ...this.prefs }
   }
 
-  /**
-   * Sanity-clamp and store prefs, then fan out to every *other* client.
-   * The sender already applied the change locally; echoing it back causes
-   * feedback loops during drag-resize.
-   */
-  setPrefs(patch: Partial<DockPrefs>, sender?: SocketLike): DockPrefs {
-    const next = { ...this.prefs, ...patch }
-    next.side = next.side === 'right' ? 'right' : 'bottom'
-    const size = Number(next.size)
-    if (!Number.isFinite(size)) next.size = next.side === 'right' ? 360 : 280
-    else next.size = Math.max(120, Math.min(3000, Math.round(size)))
-    next.open = next.open === true
-    next.session = typeof next.session === 'string' ? next.session : ''
-    next.fontFamily = sanitizeFontFamily(next.fontFamily)
-    next.applyFontToHarness = next.applyFontToHarness === true
-    this.prefs = next
-    this.broadcast({ type: 'prefs', prefs: this.prefs }, sender)
-    return this.prefs
+  getSettings(): { sizePolicy: SizePolicy } {
+    return { sizePolicy: this.sizePolicy() }
+  }
+
+  /** Legacy HTTP compatibility: only the shared session hint is host-owned. */
+  setPrefs(patch: Partial<RuntimePrefs>): RuntimePrefs {
+    if (typeof patch.session === 'string') this.prefs = { session: patch.session.slice(0, 200) }
+    return this.getPrefs()
+  }
+
+  private sizePolicy(): SizePolicy {
+    return this.getSizePolicy() === 'mirror' ? 'mirror' : 'auto'
+  }
+
+  /** Re-apply a newly committed host setting and publish the resulting mode. */
+  settingsChanged(): void {
+    const client = this.client
+    const snap = client?.currentSnapshot()
+    if (client && client.attached && snap) {
+      void this.queueSizePolicy()
+        .catch(() => { /* transient */ })
+        .finally(() => {
+          const latest = client.currentSnapshot() ?? snap
+          this.broadcast({ type: 'snapshot', snapshot: this.toSnapshot(latest, true) })
+        })
+      return
+    }
+    void this.snapshot().then((snapshot) => this.broadcast({ type: 'snapshot', snapshot }))
   }
 
   async snapshot(): Promise<Snapshot> {
@@ -93,30 +121,47 @@ export class TmuxRuntime {
       layouts: this.layoutInfos(),
       viewers: 0,
       sizeMode: 'mirror',
+      sizePolicy: this.sizePolicy(),
     }
   }
 
   async attach(session: string): Promise<Snapshot> {
     const resolved = this.resolveSession(session)
     if (!this.client) this.client = this.makeClient()
-    if (this.client.attached && this.client.session !== resolved) this.client.detach()
+    if (this.client.attached && this.client.session !== resolved) {
+      // A new control attachment always starts with ignore-size. Do not carry
+      // the old attachment's takeover bookkeeping across the boundary.
+      await this.sizePolicyTask?.catch(() => { /* the detach below supersedes it */ })
+      this.resetSizeState(false)
+      this.attachmentGeneration += 1
+      this.client.detach()
+    }
     if (!this.client.attached) {
       await this.ensureSession(resolved)
+      this.resetSizeState(false)
+      this.attachmentGeneration += 1
       await this.client.attach(resolved)
       this.startViewerPoll()
+      // Browser votes survive a manual detach/session switch, so enforce them
+      // against the fresh ignore-size client before reporting its mode.
+      await this.queueSizePolicy()
     }
     this.setPrefs({ session: resolved })
     return this.snapshot()
   }
 
   detach(): void {
-    this.resetSizeState()
+    this.resetSizeState(false)
+    this.attachmentGeneration += 1
+    this.captureRequests.clear()
     this.client?.detach()
     void this.snapshot().then((snap) => this.broadcast({ type: 'snapshot', snapshot: snap }))
   }
 
   dispose(): void {
-    this.resetSizeState()
+    this.resetSizeState(true)
+    this.attachmentGeneration += 1
+    this.captureRequests.clear()
     this.client?.detach()
     this.client = null
     for (const socket of this.sockets) socket.close(1001, 'plugin unload')
@@ -131,25 +176,98 @@ export class TmuxRuntime {
   private async applySizePolicy(snap: TmuxSnapshot): Promise<void> {
     const client = this.client
     if (client === null || !client.attached) return
-    if (snap.viewers > 0) {
-      if (this.sizeMode !== 'mirror') {
-        this.sizeMode = 'mirror'
-        this.appliedSize = ''
-        await client.setIgnoreSize(true)
-      }
+    const generation = this.attachmentGeneration
+    const desiredSize = this.effectiveSize()
+    const policy = this.sizePolicy()
+    // Never grant takeover from a cached zero. Another normal/iTerm client can
+    // attach between the five-second polls, so verify directly before every
+    // browser-driven sizing write; a failed check is conservatively a viewer.
+    let viewers = snap.viewers
+    if (policy === 'auto' && viewers === 0 && desiredSize !== null) {
+      viewers = await client.countViewers().catch(() => 1)
+    }
+    const stillCurrent = (): boolean => (
+      this.client === client && client.attached && this.attachmentGeneration === generation
+    )
+    // With another real seat, or with no visible desktop dock volunteering a
+    // grid, this control client is a pure mirror. In particular, closing a
+    // dock or crossing into the mobile breakpoint must release its old size.
+    if (policy === 'mirror' || viewers > 0 || desiredSize === null) {
+      if (this.sizeMode !== 'mirror') await client.setIgnoreSize(true)
+      if (!stillCurrent()) return
+      this.sizeMode = 'mirror'
+      this.appliedSize = ''
       return
     }
-    const desiredSize = this.effectiveSize()
-    if (desiredSize === null) return
-    if (this.sizeMode !== 'takeover') {
-      this.sizeMode = 'takeover'
-      await client.setIgnoreSize(false)
-    }
     const key = `${desiredSize.cols}x${desiredSize.rows}`
-    if (this.appliedSize !== key) {
+    if (this.sizeMode !== 'takeover') {
+      // Grid and sizing flag land atomically; never flash tmux's default
+      // control-client geometry between two refresh-client commands.
+      await client.takeOverSize(desiredSize.cols, desiredSize.rows)
+      if (!stillCurrent()) return
+      this.sizeMode = 'takeover'
       this.appliedSize = key
-      await client.setClientSize(desiredSize.cols, desiredSize.rows)
+      return
     }
+    if (this.appliedSize !== key) {
+      await client.setClientSize(desiredSize.cols, desiredSize.rows)
+      if (!stillCurrent()) return
+      this.appliedSize = key
+    }
+  }
+
+  /**
+   * Reconcile against the newest snapshot after earlier writes settle. Bursts
+   * collapse into one trailing pass; there is no one-command queue entry per
+   * layout notification during a drag.
+   */
+  private queueSizePolicy(): Promise<void> {
+    this.sizePolicyDirty = true
+    if (this.sizePolicyTask !== null) return this.sizePolicyTask
+    const run = (async () => {
+      let lastError: unknown
+      while (this.sizePolicyDirty) {
+        this.sizePolicyDirty = false
+        const client = this.client
+        const snap = client?.currentSnapshot()
+        if (client === null || client === undefined || !client.attached || snap === null || snap === undefined) continue
+        try {
+          await this.applySizePolicy(snap)
+          lastError = undefined
+        } catch (err) {
+          lastError = err
+        }
+      }
+      if (lastError !== undefined) {
+        this.scheduleSizePolicyRetry()
+        throw lastError
+      }
+      this.clearSizePolicyRetry()
+    })()
+    this.sizePolicyTask = run.finally(() => { this.sizePolicyTask = null })
+    return this.sizePolicyTask
+  }
+
+  private scheduleSizePolicyRetry(): void {
+    if (this.sizePolicyRetry !== null) return
+    const delay = this.sizePolicyRetryDelay
+    this.sizePolicyRetryDelay = Math.min(5000, delay * 2)
+    this.sizePolicyRetry = setTimeout(() => {
+      this.sizePolicyRetry = null
+      if (!this.client?.attached) return
+      void this.queueSizePolicy()
+        .then(() => {
+          const latest = this.client?.currentSnapshot()
+          if (latest) this.broadcast({ type: 'snapshot', snapshot: this.toSnapshot(latest, true) })
+        })
+        .catch(() => { /* the queue schedules the next retry */ })
+    }, delay)
+  }
+
+  private clearSizePolicyRetry(): void {
+    if (this.sizePolicyRetry !== null) clearTimeout(this.sizePolicyRetry)
+    this.sizePolicyRetry = null
+    this.sizePolicyRetryDelay = 250
   }
 
   /** The grid every reporting viewer can display: min of cols and rows. */
@@ -164,10 +282,12 @@ export class TmuxRuntime {
     return { cols, rows }
   }
 
-  private resetSizeState(): void {
+  private resetSizeState(clearDesiredSizes: boolean): void {
     this.sizeMode = 'mirror'
     this.appliedSize = ''
-    this.desiredSizes.clear()
+    this.sizePolicyDirty = false
+    if (clearDesiredSizes) this.desiredSizes.clear()
+    this.clearSizePolicyRetry()
     if (this.viewerPoll) clearInterval(this.viewerPoll)
     this.viewerPoll = null
   }
@@ -190,7 +310,6 @@ export class TmuxRuntime {
 
   bind(socket: SocketLike): void {
     this.sockets.add(socket)
-    socket.send(JSON.stringify({ type: 'prefs', prefs: this.prefs } satisfies HostToClient))
     void this.snapshot().then((snap) => {
       socket.send(JSON.stringify({ type: 'snapshot', snapshot: snap } satisfies HostToClient))
     })
@@ -204,12 +323,10 @@ export class TmuxRuntime {
     })
     socket.on('close', () => {
       this.sockets.delete(socket)
+      this.captureRequests.delete(socket)
       // A departing viewer may unblock a larger shared grid.
       if (this.desiredSizes.delete(socket)) {
-        const snap = this.client?.currentSnapshot()
-        if (snap && this.client?.attached) {
-          void this.applySizePolicy(snap).catch(() => { /* transient */ })
-        }
+        void this.queueSizePolicy().catch(() => { /* transient */ })
       }
     })
   }
@@ -246,31 +363,103 @@ export class TmuxRuntime {
   private makeClient(): TmuxControlClient {
     const client = new TmuxControlClient(this.tmuxBin)
     client.on('snapshot', (snap) => {
-      // Settle the size policy first so the broadcast reports the final mode.
-      void this.applySizePolicy(snap)
+      // Settle serialized size policy first so the broadcast reports the final
+      // mode and concurrent click/resize snapshots cannot race flag changes.
+      void this.queueSizePolicy()
         .catch(() => { /* transient */ })
         .finally(() => {
-          this.broadcast({ type: 'snapshot', snapshot: this.toSnapshot(snap, true) })
+          const latest = client.currentSnapshot() ?? snap
+          this.broadcast({ type: 'snapshot', snapshot: this.toSnapshot(latest, true) })
         })
     })
     client.on('output', (pane, data) => {
       this.broadcast({ type: 'output', pane, data })
-    })
-    client.on('history', (pane, data) => {
-      this.broadcast({ type: 'history', pane, data })
     })
     client.on('error', (message) => {
       this.broadcast({ type: 'error', message })
     })
     client.on('exit', () => {
       // Only unexpected exits arrive here; a requested detach broadcasts from detach().
-      this.resetSizeState()
+      this.resetSizeState(false)
+      this.attachmentGeneration += 1
+      this.captureRequests.clear()
       void this.snapshot().then((snap) => this.broadcast({
         type: 'snapshot',
         snapshot: { ...snap, attached: false, error: 'tmux control client exited' },
       }))
     })
     return client
+  }
+
+  /** Coalesce capture spam to the newest pending request per socket. */
+  private requestCapture(socket: SocketLike, lines?: number, pane?: string): void {
+    this.captureRequests.set(socket, { lines, pane })
+    if (this.captureTask !== null) return
+    const run = this.drainCaptures()
+    this.captureTask = run
+      .catch(() => { /* per-request failures are reported by drainCaptures */ })
+      .finally(() => {
+        this.captureTask = null
+        // Defensive against a request arriving as the drain settles.
+        if (this.captureRequests.size > 0) {
+          const next = this.captureRequests.entries().next().value as [
+            SocketLike,
+            { lines?: number; pane?: string },
+          ] | undefined
+          if (next !== undefined) this.requestCapture(next[0], next[1].lines, next[1].pane)
+        }
+      })
+  }
+
+  private async drainCaptures(): Promise<void> {
+    while (this.captureRequests.size > 0) {
+      const entry = this.captureRequests.entries().next().value as [
+        SocketLike,
+        { lines?: number; pane?: string },
+      ] | undefined
+      if (entry === undefined) return
+      const [socket, request] = entry
+      this.captureRequests.delete(socket)
+      const client = this.client
+      const generation = this.attachmentGeneration
+      if (client === null || !client.attached) continue
+      try {
+        const paneIds = request.pane === undefined
+          ? (client.currentSnapshot()?.panes ?? []).map((pane) => pane.id)
+          : [request.pane]
+        // Send each seed as soon as that pane's command closes. Holding all
+        // panes until the final capture would let pane-one live output arrive
+        // before pane-one history and then be reset away in the browser.
+        for (const paneId of paneIds) {
+          let captures: Array<{ pane: string; data: string }>
+          try {
+            captures = await client.captureVisible(request.lines, paneId)
+          } catch (err) {
+            if (!this.sockets.has(socket)) break
+            socket.send(JSON.stringify({
+              type: 'error',
+              message: `history capture failed for ${paneId}: ${err instanceof Error ? err.message : String(err)}`,
+            } satisfies HostToClient))
+            continue
+          }
+          if (
+            !this.sockets.has(socket)
+            || this.client !== client
+            || !client.attached
+            || this.attachmentGeneration !== generation
+          ) break
+          for (const capture of captures) {
+            socket.send(JSON.stringify({ type: 'history', ...capture } satisfies HostToClient))
+          }
+        }
+      } catch (err) {
+        if (!this.sockets.has(socket)) continue
+        socket.send(JSON.stringify({
+          type: 'error',
+          message: err instanceof Error ? err.message : String(err),
+        } satisfies HostToClient))
+      }
+    }
   }
 
   private async handle(socket: SocketLike, raw: string): Promise<void> {
@@ -285,11 +474,7 @@ export class TmuxRuntime {
       return
     }
     if (msg.type === 'capture') {
-      if (this.client?.attached) await this.client.captureVisible()
-      return
-    }
-    if (msg.type === 'prefs') {
-      this.setPrefs(msg.prefs, socket)
+      this.requestCapture(socket, msg.lines, msg.pane)
       return
     }
     if (msg.type === 'attach') {
@@ -302,12 +487,18 @@ export class TmuxRuntime {
       return
     }
     if (msg.type === 'resize') {
+      if ('active' in msg) {
+        if (this.desiredSizes.delete(socket)) await this.queueSizePolicy()
+        return
+      }
       const cols = Number(msg.cols)
       const rows = Number(msg.rows)
       if (Number.isFinite(cols) && Number.isFinite(rows)) {
-        this.desiredSizes.set(socket, { cols: Math.floor(cols), rows: Math.floor(rows) })
-        const snap = this.client?.currentSnapshot()
-        if (snap && this.client?.attached) await this.applySizePolicy(snap)
+        this.desiredSizes.set(socket, {
+          cols: Math.max(20, Math.min(500, Math.floor(cols))),
+          rows: Math.max(6, Math.min(300, Math.floor(rows))),
+        })
+        await this.queueSizePolicy()
       }
       return
     }
@@ -349,6 +540,7 @@ export class TmuxRuntime {
       layouts: this.layoutInfos(),
       viewers: snap.viewers,
       sizeMode: this.sizeMode,
+      sizePolicy: this.sizePolicy(),
     }
   }
 }

@@ -63,10 +63,24 @@ interface OpenBlock {
 interface Events {
   snapshot: [TmuxSnapshot]
   output: [paneId: string, data: string]
-  history: [paneId: string, data: string]
   error: [message: string]
   /** Fired only for unexpected exits — a requested detach never emits this. */
   exit: [code: number | null]
+}
+
+export interface HistoryCapture {
+  pane: string
+  data: string
+}
+
+export const DEFAULT_HISTORY_LINES = 2000
+export const MAX_HISTORY_LINES = 20000
+export const MAX_HISTORY_BYTES = 800000
+
+export function normalizeHistoryLines(value: unknown): number {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) return DEFAULT_HISTORY_LINES
+  return Math.max(0, Math.min(MAX_HISTORY_LINES, Math.floor(parsed)))
 }
 
 export interface TmuxControlOptions {
@@ -87,6 +101,8 @@ export class TmuxControlClient extends EventEmitter<Events> {
   private stderrTail = ''
   private requestedDetach = false
   private refreshTimer: ReturnType<typeof setTimeout> | null = null
+  private drainScheduled = false
+  private processingInput = false
   readonly tmuxBin: string
   private readonly spawnTransport: SpawnTransport
   private readonly listSessions: (tmuxBin: string) => Promise<SessionInfo[]>
@@ -146,7 +162,6 @@ export class TmuxControlClient extends EventEmitter<Events> {
     try {
       this.clientName = (await this.command("display-message -p '#{client_name}'")).trim()
       await this.refreshSnapshot()
-      await this.captureVisible()
     } catch (err) {
       const detail = this.stderrTail.trim()
       this.detach()
@@ -203,23 +218,27 @@ export class TmuxControlClient extends EventEmitter<Events> {
   async selectWindow(windowId: string): Promise<void> {
     await this.command(`select-window -t ${quote(windowId)}`)
     await this.refreshSnapshot()
-    await this.captureVisible()
   }
 
-  async captureVisible(): Promise<void> {
-    const panes = this.snapshot?.panes ?? []
+  /**
+   * Capture history for the currently visible panes. The caller owns routing:
+   * unlike live output, a browser's requested history depth must not be pushed
+   * to every other viewer.
+   */
+  async captureVisible(requestedLines: unknown = DEFAULT_HISTORY_LINES, paneId?: string): Promise<HistoryCapture[]> {
+    const historyLines = normalizeHistoryLines(requestedLines)
+    const visible = this.snapshot?.panes ?? []
+    const panes = paneId === undefined ? visible : visible.filter((pane) => pane.id === paneId)
+    const captures: HistoryCapture[] = []
     for (const pane of panes) {
-      let text = ''
-      try {
-        text = await this.command(`capture-pane -epJ -t ${quote(pane.id)} -S -200`)
-      } catch {
-        continue
-      }
+      const text = await this.command(`capture-pane -epJ -t ${quote(pane.id)} -S -${historyLines}`)
       const lines = text.split('\n')
       while (lines.length > 0 && lines[lines.length - 1].trim() === '') lines.pop()
       if (lines.length === 0) continue
-      this.emit('history', pane.id, `${lines.join('\r\n')}\r\n`)
+      const data = truncateHistory(`${lines.join('\r\n')}\r\n`)
+      if (data !== '') captures.push({ pane: pane.id, data })
     }
+    return captures
   }
 
   async zoom(paneId?: string): Promise<void> {
@@ -270,10 +289,19 @@ export class TmuxControlClient extends EventEmitter<Events> {
     await this.command(`refresh-client -f ${on ? '' : '!'}ignore-size`)
   }
 
+  /**
+   * Become the sizing client at a known grid in one tmux command. Applying
+   * `-C` and clearing `ignore-size` atomically avoids the transient 80x24
+   * resize that occurs when the flag is cleared before the grid is set.
+   */
+  async takeOverSize(cols: number, rows: number): Promise<void> {
+    const { cols: c, rows: r } = clampClientSize(cols, rows)
+    await this.command(`refresh-client -C ${c}x${r} -f !ignore-size`)
+  }
+
   /** Dictate the window size (only effective while ignore-size is off). */
   async setClientSize(cols: number, rows: number): Promise<void> {
-    const c = Math.max(20, Math.min(500, Math.floor(cols)))
-    const r = Math.max(6, Math.min(300, Math.floor(rows)))
+    const { cols: c, rows: r } = clampClientSize(cols, rows)
     await this.command(`refresh-client -C ${c}x${r}`)
   }
 
@@ -300,7 +328,10 @@ export class TmuxControlClient extends EventEmitter<Events> {
       "list-windows -F '#{window_id}\t#{window_index}\t#{window_name}\t#{window_active}'",
     )
     const sessions = await this.listSessions(this.tmuxBin)
-    const viewers = await this.countViewers().catch(() => 0)
+    // Viewer detection grants sizing authority, so every failure must fail
+    // closed. Reusing an earlier zero could resize a client that attached after
+    // that snapshot but before this refresh.
+    const viewers = await this.countViewers().catch(() => 1)
     const fromList = list.trim() === '' ? [] : list.trim().split('\n').map(parsePaneLine)
     const zoomed = zoomedFlag === '1'
     // tmux keeps reporting hidden panes with their pre-zoom coordinates. The
@@ -376,12 +407,36 @@ export class TmuxControlClient extends EventEmitter<Events> {
 
   private push(chunk: string): void {
     this.buf += chunk
-    while (true) {
-      const nl = this.buf.indexOf('\n')
-      if (nl < 0) return
-      const line = this.buf.slice(0, nl).replace(/\r$/, '')
-      this.buf = this.buf.slice(nl + 1)
-      this.handleLine(line)
+    if (this.processingInput || this.drainScheduled) return
+    this.processingInput = true
+    try {
+      while (true) {
+        const nl = this.buf.indexOf('\n')
+        if (nl < 0) return
+        const line = this.buf.slice(0, nl).replace(/\r$/, '')
+        this.buf = this.buf.slice(nl + 1)
+        const openNum = this.block?.num
+        const closing = openNum === undefined ? null : parseBlockEdge(line)
+        const closesOwnCommand = closing !== null
+          && closing.num === openNum
+          && closing.ours
+          && (closing.kind === 'end' || closing.kind === 'error')
+        this.handleLine(line)
+        if (closesOwnCommand) {
+          // Promise continuations (notably capture -> socket history) must run
+          // before a later %output already buffered in this same transport
+          // chunk. Otherwise the browser writes the live output and then its
+          // history seed resets it away. Resume parsing on the next turn.
+          this.drainScheduled = true
+          setImmediate(() => {
+            this.drainScheduled = false
+            this.push('')
+          })
+          return
+        }
+      }
+    } finally {
+      this.processingInput = false
     }
   }
 
@@ -507,6 +562,23 @@ function mergePanes(listed: TmuxPane[], layout: PaneRect[]): TmuxPane[] {
       ?? layout.find((rect) => Math.abs(rect.left - pane.left) < 1 && Math.abs(rect.top - pane.top) < 1)
     return hit === undefined ? pane : { ...pane, left: hit.left, top: hit.top, width: hit.width, height: hit.height }
   })
+}
+
+function clampClientSize(cols: number, rows: number): { cols: number; rows: number } {
+  return {
+    cols: Math.max(20, Math.min(500, Math.floor(cols))),
+    rows: Math.max(6, Math.min(300, Math.floor(rows))),
+  }
+}
+
+/** Keep the newest complete lines without exceeding one browser frame's budget. */
+function truncateHistory(data: string): string {
+  const encoded = Buffer.from(data, 'utf8')
+  if (encoded.length <= MAX_HISTORY_BYTES) return data
+  let tail = encoded.subarray(encoded.length - MAX_HISTORY_BYTES)
+  const newline = tail.indexOf(0x0a)
+  if (newline >= 0) tail = tail.subarray(newline + 1)
+  return tail.toString('utf8').replace(/^\uFFFD+/, '')
 }
 
 function quote(value: string): string {

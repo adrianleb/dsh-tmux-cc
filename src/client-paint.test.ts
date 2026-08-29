@@ -62,4 +62,81 @@ test('client bundle invariants', () => {
   assert.match(src, /type: 'zoom', pane: pane\.id/)
   // IME composition keys must never trigger tmux shortcuts.
   assert.match(src, /event\.isComposing \|\| event\.keyCode === 229/)
+  // Mobile stability: narrow viewports mirror the tmux grid and never
+  // dictate the shared window size (keyboard/URL-bar churn caused resize
+  // loops and shrank every other viewer through the min-size rule).
+  const reportSrc = src.match(/function reportDockGrid\([\s\S]*?\n    \}/)?.[0]
+  assert.ok(reportSrc)
+  assert.match(reportSrc, /if \(isNarrowViewport\(\) \|\| document\.body\.dataset\.dshTmuxDragging\)/)
+  assert.match(reportSrc, /store\.clearResize\(\)/)
+  // Kill confirmation is preference-driven and applies to pointer and prefix-x actions.
+  assert.match(src, /shouldArmKill\(prefs\.confirmKill, armedKill, id\)/)
+  assert.match(src, /store\.requestKill\('active'\)/)
+  assert.doesNotMatch(src, /lastPointerType/)
+  // Touch: taps never summon the on-screen keyboard implicitly; the toolbar
+  // keyboard toggle does, and terminals opt out of native panning.
+  assert.match(src, /data-tmux-cc-kbd/)
+  assert.match(src, /if \(ev\.pointerType === 'touch'\) return/)
+  assert.match(src, /touchAction: 'none'/)
+  // Touch scrolling is natural-direction with momentum, and holds repaints
+  // while a gesture is active (auto-expiring so a lost touchend cannot wedge).
+  assert.match(src, /gestureGuard/)
+  assert.match(src, /const step = lastY - y/)
+  assert.match(src, /requestAnimationFrame\(tick\)/)
+  // Re-seeds preserve the reader's scrollback position instead of yanking
+  // the viewport to the bottom.
+  assert.match(src, /function writeSeed\(/)
+  assert.match(src, /scrollLines\(-fromBottom\)/)
+  // Visual-viewport inset jitter under 2px never repositions the shell, and
+  // horizontal panning is accounted for as well as keyboard height.
+  assert.match(src, /insetTop/)
+  assert.match(src, /vv\.offsetLeft/)
+  // The font fit is a one-step, one-degree-of-freedom calculation. The former
+  // lineHeight/letterSpacing fixed-point recursion had a period-2 limit cycle.
+  assert.match(src, /function fittedFontSize\(/)
+  assert.doesNotMatch(src, /function fitPane\(rec, pane, tries\)/)
+  assert.doesNotMatch(src, /term\.options\.lineHeight = lh/)
+  assert.match(src, /term\.options\.letterSpacing = 0/)
+  const fitSource = src.match(/function fittedFontSize\([\s\S]*?\n    \}/)?.[0]
+  assert.ok(fitSource)
+  const fittedFontSize = Function(`return (${fitSource})`)() as (
+    current: number, screenWidth: number, screenHeight: number, hostWidth: number, hostHeight: number,
+  ) => number
+  assert.equal(fittedFontSize(12, 240, 240, 188, 300), 9.25)
+  assert.equal(fittedFontSize(12, 240, 240, 240, 240), 12)
+  assert.equal(fittedFontSize(12, 240, 240, 1000, 1000), 18)
+  // Layout push is stylesheet-owned and additive with better-sidebar. No
+  // inline margins remain on DSH's center column or AppFrame.
+  assert.match(src, /data-dsh-tmux-conversation/)
+  assert.match(src, /--dsh-sidebar-height,0px\) \+ var\(--dsh-tmux-height,0px\)/)
+  assert.match(src, /right: 'var\(--dsh-sidebar-width, 0px\)'/)
+  assert.doesNotMatch(src, /col\.style\.marginBottom/)
+  assert.doesNotMatch(src, /frame\.style\.marginRight/)
+  // A closed/mobile client retracts its takeover vote, and teardown closes its
+  // websocket so HMR cannot leave ghost sizing clients behind.
+  assert.match(src, /type: 'resize', active: false/)
+  assert.match(src, /ws\.close\(1000, 'plugin unload'\)/)
+  assert.match(src, /store\.dispose\(\)/)
+  // Presentation preferences are versioned, explicitly normalized, and never
+  // sent through the shared websocket.
+  assert.match(src, /PREFS_VERSION = 2/)
+  assert.match(src, /function normalizeLocalPrefs\(/)
+  assert.match(src, /JSON\.stringify\(\{ version: PREFS_VERSION, prefs \}\)/)
+  assert.doesNotMatch(src, /send\(\{ type: 'prefs'/)
+  assert.doesNotMatch(src, /msg\.type === 'prefs'/)
+  // New and existing xterms receive every terminal preference.
+  assert.match(src, /cursorBlink: prefs\.cursorBlink/)
+  assert.match(src, /cursorStyle: prefs\.cursorStyle/)
+  assert.match(src, /scrollback: prefs\.scrollbackLines/)
+  assert.match(src, /fontSize: prefs\.fontSize/)
+  assert.match(src, /rec\.term\.options\.scrollback = prefs\.scrollbackLines/)
+  assert.match(src, /measureCell\(body, termFontFamily\(prefs\), prefs\.fontSize\)/)
+  // An xterm load that resolves after the pane was replaced cannot populate
+  // the detached record for a reused tmux pane id.
+  assert.match(src, /store\.panes\.get\(pane\.id\) !== rec/)
+  // History requests carry the local depth and pane target; host settings use
+  // the standard durable settings namespace instead of localStorage.
+  assert.match(src, /type: 'capture', pane: id, lines: prefs\.scrollbackLines/)
+  assert.match(src, /ctx\.settingsScope\.bind/)
+  assert.match(src, /settingsScope\.set\('sizePolicy'/)
 })

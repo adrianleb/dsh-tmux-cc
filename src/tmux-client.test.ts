@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { TmuxControlClient, type ControlTransport } from './tmux-client.ts'
+import {
+  DEFAULT_HISTORY_LINES,
+  MAX_HISTORY_BYTES,
+  MAX_HISTORY_LINES,
+  TmuxControlClient,
+  normalizeHistoryLines,
+  type ControlTransport,
+} from './tmux-client.ts'
 import type { SessionInfo } from './types.ts'
 
 class FakeTransport implements ControlTransport {
@@ -61,8 +68,6 @@ test('attach survives the unsolicited guard block and parses the snapshot', asyn
   const fake = new FakeTransport()
   scriptedAttach(fake)
   const client = makeClient(fake)
-  const histories: Array<[string, string]> = []
-  client.on('history', (pane, data) => histories.push([pane, data]))
   const attachPromise = client.attach('verify')
   // The guard block (flags=0) plus a notification arrive before any reply.
   fake.feed('%begin 1 99 0\n%end 1 99 0\n%session-changed $1 verify\n')
@@ -77,7 +82,58 @@ test('attach survives the unsolicited guard block and parses the snapshot', asyn
   assert.equal(snap.panes.length, 1)
   assert.equal(snap.panes[0].id, '%5')
   assert.equal(snap.viewers, 0)
-  assert.deepEqual(histories, [['%5', 'hello world\r\n']])
+  assert.equal(fake.writes.some((line) => line.startsWith('capture-pane')), false)
+
+  const histories = await client.captureVisible(321)
+  assert.deepEqual(histories, [{ pane: '%5', data: 'hello world\r\n' }])
+  assert.equal(fake.writes.at(-1), "capture-pane -epJ -t '%5' -S -321\n")
+  const writeCount = fake.writes.length
+  assert.deepEqual(await client.captureVisible(10, '%999'), [])
+  assert.equal(fake.writes.length, writeCount)
+})
+
+test('history line counts are finite, bounded integers', () => {
+  assert.equal(normalizeHistoryLines(undefined), DEFAULT_HISTORY_LINES)
+  assert.equal(normalizeHistoryLines(Number.NaN), DEFAULT_HISTORY_LINES)
+  assert.equal(normalizeHistoryLines(-1), 0)
+  assert.equal(normalizeHistoryLines(12.9), 12)
+  assert.equal(normalizeHistoryLines(MAX_HISTORY_LINES + 1), MAX_HISTORY_LINES)
+})
+
+test('history resolves before trailing live output from the same transport chunk', async () => {
+  const fake = new FakeTransport()
+  scriptedAttach(fake)
+  const client = makeClient(fake)
+  const attachPromise = client.attach('verify')
+  fake.feed('%begin 1 99 0\n%end 1 99 0\n')
+  await attachPromise
+
+  fake.autoRespond = null
+  const outputs: Array<[string, string]> = []
+  client.on('output', (pane, data) => outputs.push([pane, data]))
+  const capture = client.captureVisible(1, '%5')
+  fake.feed('%begin 1 999 1\nseed\n%end 1 999 1\n%output %5 trailing\n')
+  assert.deepEqual(await capture, [{ pane: '%5', data: 'seed\r\n' }])
+  assert.deepEqual(outputs, [])
+  await new Promise(resolve => setImmediate(resolve))
+  assert.deepEqual(outputs, [['%5', 'trailing']])
+})
+
+test('history keeps newest complete lines within the byte budget', async () => {
+  const fake = new FakeTransport()
+  scriptedAttach(fake)
+  const client = makeClient(fake)
+  const attachPromise = client.attach('verify')
+  fake.feed('%begin 1 99 0\n%end 1 99 0\n')
+  await attachPromise
+
+  const lines = Array.from({ length: 100 }, (_, index) => `${String(index).padStart(3, '0')}:${'x'.repeat(9995)}`)
+  fake.autoRespond = line => line.startsWith('capture-pane') ? lines.join('\n') : ''
+  const captures = await client.captureVisible(MAX_HISTORY_LINES, '%5')
+  assert.equal(captures.length, 1)
+  assert.ok(Buffer.byteLength(captures[0].data, 'utf8') <= MAX_HISTORY_BYTES)
+  assert.match(captures[0].data, /^021:/)
+  assert.match(captures[0].data, /099:x+\r\n$/)
 })
 
 test('native tmux zoom exposes only the full-window visible pane', async () => {
@@ -136,7 +192,22 @@ test('viewer counting: self and ignore-size docks excluded, iTerm -CC seats coun
   assert.equal(await client.countViewers(), 2)
 })
 
-test('setIgnoreSize and setClientSize emit the right commands', async () => {
+test('viewer detection failure fails closed even after a known zero', async () => {
+  const fake = new FakeTransport()
+  scriptedAttach(fake)
+  const client = makeClient(fake, 10)
+  const p = client.attach('verify')
+  fake.feed('%begin 1 99 0\n%end 1 99 0\n')
+  await p
+  assert.equal(client.currentSnapshot()?.viewers, 0)
+
+  const respond = fake.autoRespond
+  fake.autoRespond = (line) => line.startsWith('list-clients') ? null : respond?.(line) ?? ''
+  await client.refreshSnapshot()
+  assert.equal(client.currentSnapshot()?.viewers, 1)
+})
+
+test('sizing commands clamp grids and takeover atomically', async () => {
   const fake = new FakeTransport()
   scriptedAttach(fake)
   const client = makeClient(fake)
@@ -144,12 +215,12 @@ test('setIgnoreSize and setClientSize emit the right commands', async () => {
   fake.feed('%begin 1 99 0\n%end 1 99 0\n')
   await p
   fake.writes = []
-  await client.setIgnoreSize(false)
-  await client.setClientSize(95.7, 26.2)
+  await client.takeOverSize(95.7, 26.2)
+  await client.setClientSize(999, 1)
   await client.setIgnoreSize(true)
   assert.deepEqual(fake.writes, [
-    'refresh-client -f !ignore-size\n',
-    'refresh-client -C 95x26\n',
+    'refresh-client -C 95x26 -f !ignore-size\n',
+    'refresh-client -C 500x6\n',
     'refresh-client -f ignore-size\n',
   ])
 })
@@ -265,6 +336,7 @@ test('%output payloads are octal-decoded', async () => {
   const outputs: Array<[string, string]> = []
   client.on('output', (pane, data) => outputs.push([pane, data]))
   fake.feed('%output %5 hi\\015\\012\n')
+  await new Promise(resolve => setImmediate(resolve))
   assert.deepEqual(outputs, [['%5', 'hi\r\n']])
 })
 

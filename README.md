@@ -102,7 +102,10 @@ At viewport widths below 768px, the cockpit follows the narrow-layout pattern es
 
 - The dock becomes a full-screen floating drawer and stops pushing the DSH conversation layout.
 - Every tmux pane stays visible in its real tmux grid position; there is no separate client-side pane-tab or single-pane mode.
-- Tap a pane to focus it, then use the toolbar zoom button or `Ctrl+B z`. This sends tmux's native `resize-pane -Z`; tapping it again restores the grid. Double-clicking a pane title performs the same native toggle.
+- Tap a pane to select it, then use the toolbar zoom button or `Ctrl+B z`. This sends tmux's native `resize-pane -Z`; tapping it again restores the grid. Double-clicking a pane title performs the same native toggle.
+- Tapping a pane never opens the on-screen keyboard. The toolbar keyboard button summons and dismisses it explicitly, so scrolling and reading stay undisturbed.
+- One-finger drags scroll pane scrollback with natural direction and momentum; panes whose programs enable mouse reporting receive the gesture instead.
+- A narrow viewport is a pure mirror: it retracts any grid previously reported by that browser and never resizes the shared tmux window, so the keyboard opening or the URL bar collapsing cannot reflow other viewers or trigger refresh loops. Fonts scale to fit instead.
 - Dock and pane resize handles are disabled, the desktop side selector is hidden, and primary controls use 44px touch targets.
 - Safe-area padding supports notched devices, while `visualViewport` resize/scroll tracking keeps the terminal above the on-screen keyboard.
 - At 768px and wider, the complete desktop layout and resize controls return automatically.
@@ -112,9 +115,23 @@ At viewport widths below 768px, the cockpit follows the narrow-layout pattern es
 The mode changes automatically and is re-evaluated every five seconds:
 
 - **Mirror** — another sizing client is attached, such as a normal `tmux attach` or iTerm2 `-CC` client. The dock keeps `ignore-size`, never changes that client's geometry, renders each pane at its real cell size, and scales the font to fit.
-- **Takeover** — only `ignore-size` clients are present. The dock reports its available grid with `refresh-client -C` and renders at the native font size.
+- **Takeover** — only `ignore-size` clients are present. The dock reports its available grid with `refresh-client -C` and renders at the native font size. Only desktop-width viewers report a grid; mobile viewers always mirror.
 
-Opening another tmux client moves the dock back to mirror mode; closing it returns the dock to takeover mode.
+Opening another tmux client moves the dock back to mirror mode; closing it returns the dock to takeover mode when the host-wide policy is **Auto**. Choose **Mirror only** in **Settings → tmux → Behavior & safety** if this plugin should never resize tmux windows. Mobile viewers remain mirror-only under either policy.
+
+## Settings
+
+**Settings → tmux** separates browser-local presentation from the one behavior shared by the host:
+
+- **Dock:** bottom/right placement, open/hide, and reset-to-defaults.
+- **Terminal:** font family, preferred size, cursor style/blinking, scrollback depth, and optional DSH code-font propagation. Mirror mode may shrink below the preferred font size to preserve the real grid.
+- **Behavior & safety:** durable host-wide **Auto / Mirror only** sizing policy and browser-local pane-close confirmation.
+
+Browser-local settings are versioned in local storage and never broadcast to other viewers. Reset preserves whether the dock is open and the browser's selected session. The sizing policy is registered through DSH's settings service, so a writable loopback settings provider persists it in the normal settings document.
+
+Scrollback defaults to 2,000 lines and is bounded to 20,000 lines and 800 KB per pane. The value controls both xterm retention and tmux history requested after reconnect or a window switch. History replies return only to the browser that requested them; capture work is serialized and repeated pending requests from one browser coalesce to the newest request.
+
+Pane-close confirmation is enabled by default. Repeat the same close button, toolbar action, or `Ctrl+B x` within three seconds to confirm. The host still refuses to kill the final pane in a session.
 
 ## Fonts
 
@@ -152,6 +169,9 @@ Add options to the plugin entry in your DSH Web profile:
 - id: tmux-cc
   name: dsh-tmux-cc
   config:
+    # Optional composition default. Settings → tmux can store a user override.
+    sizePolicy: auto # auto | mirror
+
     # Optional. Defaults to $DSH_TMUX_BIN, then `tmux` from PATH.
     tmuxBin: /usr/local/bin/tmux
 
@@ -163,6 +183,8 @@ Add options to the plugin entry in your DSH Web profile:
         launch: /home/me/.local/bin/start-project-tmux
         launchArgs: ["--ensure-only"]
 ```
+
+`sizePolicy` supplies the deployment default; a value saved through Settings is layered above it. `auto` permits takeover only when no external sizing client exists, while `mirror` always keeps this plugin out of tmux window sizing.
 
 When a recipe's session does not exist, selecting it runs `launch` with `launchArgs` and then attaches. If `launchArgs` is omitted, it defaults to `["--ensure-only"]`. Launcher configuration is trusted administrator input and runs with the DSH operating-system user's privileges. Host executable paths are never sent to the browser.
 

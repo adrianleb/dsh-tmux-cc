@@ -4,6 +4,52 @@ All notable changes to dsh-tmux-cc are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.6.0] - 2026-08-29
+
+### Added
+
+- Settings → tmux now exposes dock position, preferred terminal font size, cursor style and blinking, bounded scrollback depth, pane-close confirmation, and a local reset action alongside the existing font controls.
+- A durable host-wide sizing policy can be set to **Auto** or **Mirror only**. Mirror-only keeps `ignore-size` even when no other sizing client is attached; the plugin configuration may provide the composition default.
+- Reconnect history depth follows the browser's scrollback setting (2,000 lines by default, capped at 20,000 lines and 800 KB per pane).
+
+### Changed
+
+- Dock geometry, appearance, scrollback, close confirmation, and preferred session are versioned browser-local preferences. They are no longer broadcast between devices or overwritten by host startup defaults.
+- History capture is request- and socket-scoped. One browser changing depth or reconnecting no longer resets every other viewer's panes.
+- Pane close buttons, the toolbar action, and `Ctrl+B x` now share one confirmation policy; confirmation is enabled by default and requires repeating the same action within three seconds.
+- Preferred font size participates in takeover grid measurement and is a ceiling for mirror-mode fitting; existing panes update font, cursor, and scrollback options live.
+
+### Fixed
+
+- Legacy or malformed local preference keys are explicitly normalized and unknown fields are discarded during migration.
+- A browser's local font availability and dock dimensions can no longer leak into another browser through the shared tmux runtime.
+- Sizing now verifies external viewers immediately before every takeover write, fails closed on detection errors, retries transient policy writes, and reapplies surviving browser votes after detach or session switches.
+- Capture requests are globally serialized and coalesced per browser; history is installed before trailing live output from the same control chunk, avoiding lost output and unbounded command queues.
+- An xterm load that resolves after a pane was replaced no longer mounts into the detached pane record.
+
+## [0.5.4] - 2026-08-26
+
+### Added
+
+- Mobile toolbar keyboard toggle: the on-screen keyboard is summoned and dismissed explicitly instead of popping up whenever a pane is tapped. The button mirrors real terminal focus via `aria-pressed`.
+
+### Changed
+
+- Kill-pane confirmation is now pointer-aware: mouse clicks kill on the first click again, while touch and pen input keep the two-tap arm-then-confirm guard. The desktop close buttons no longer demand a double click.
+- Narrow (mobile) viewports no longer report a dock grid to the host, so a phone can never resize the shared tmux window. This removes the keyboard-open/URL-bar resize→re-render loop that made mobile nearly unusable, and stops a phone from shrinking every other viewer through the min-size rule. Mobile is a faithful mirror that scales fonts to fit.
+- Touch scrollback now follows the finger in the natural direction (drag down reveals older lines — it was inverted) and continues with momentum after release.
+
+### Fixed
+
+- Pane selection and layout notifications no longer re-run a non-convergent font/line-height fit. Terminal fitting now uses one cached, font-size-only step, eliminating the two-state whole-grid resize cycle visible after clicks.
+- Resize observation is animation-frame coalesced and no longer writes inline margins back onto the observed DSH column. Layout space is composed through plugin-owned CSS variables and markers instead.
+- Right docking now composes with dsh-better-sidebar: the tmux dock sits to the left of its panel, shares the remaining width without crushing chat, and additive bottom pushes no longer leave stale chat margins after either panel collapses.
+- Closing the dock or entering mobile mode retracts that browser's tmux sizing vote; plugin teardown also closes its WebSocket, preventing stale/ghost viewers from continuing to resize the shared tmux window after HMR.
+- Touch scrolling no longer fights the browser: terminal hosts opt out of native panning (`touch-action: none`), so iOS cannot capture the gesture into a visual-viewport pan — which also makes scrolling work while the on-screen keyboard is open.
+- Repaints are held while a touch-scroll gesture is active (with an auto-expiring guard), so a snapshot arriving mid-drag no longer re-fits fonts and jiggles the pane under the finger.
+- Re-seeding a terminal (reconnect, window switch) preserves how far the reader had scrolled up instead of yanking the viewport to the bottom.
+- Sub-2px `visualViewport` inset jitter (URL-bar settling, scroll rounding) no longer repositions the mobile shell, removing a persistent source of resize flashes while scrolling.
+
 ## [0.5.3] - 2026-08-26
 
 ### Fixed
@@ -112,7 +158,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Switched input to byte-safe, hex-encoded `send-keys -H` commands.
 - Paired control replies by tmux block tags and added command timeouts.
 
-[Unreleased]: https://github.com/adrianleb/dsh-tmux-cc/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/adrianleb/dsh-tmux-cc/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/adrianleb/dsh-tmux-cc/compare/v0.5.4...v0.6.0
+[0.5.4]: https://github.com/adrianleb/dsh-tmux-cc/compare/v0.5.3...v0.5.4
+[0.5.3]: https://github.com/adrianleb/dsh-tmux-cc/compare/v0.5.2...v0.5.3
+[0.5.2]: https://github.com/adrianleb/dsh-tmux-cc/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/adrianleb/dsh-tmux-cc/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/adrianleb/dsh-tmux-cc/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/adrianleb/dsh-tmux-cc/compare/v0.4.0...v0.4.1

@@ -14,5 +14,10 @@ test('sanitizeFontFamily keeps CSS family stacks and drops injections', () => {
 
 test('default dock prefs leave fontFamily empty (client supplies the system stack)', () => {
   assert.equal(DEFAULT_PREFS.fontFamily, '')
+  assert.equal(DEFAULT_PREFS.fontSize, 12)
+  assert.equal(DEFAULT_PREFS.cursorStyle, 'block')
+  assert.equal(DEFAULT_PREFS.cursorBlink, true)
+  assert.equal(DEFAULT_PREFS.scrollbackLines, 2000)
+  assert.equal(DEFAULT_PREFS.confirmKill, true)
   assert.equal(DEFAULT_PREFS.applyFontToHarness, false)
 })
