@@ -108,8 +108,21 @@ test('client bundle invariants', () => {
   assert.match(src, /\[data-tmux-cc-shell\]\[data-mobile="1"\] \[data-tmux-cc-touch\]\{display:block\}/)
   assert.match(src, /for \(const surface of \[rec\.touchLayer, host\]\)/)
   // The keyboard should resize the layout viewport where the browser allows
-  // it, removing the pan-steal range entirely.
+  // it, removing the pan-steal range entirely — but only on Chromium, which
+  // honors the key; Safari's dynamic viewport re-parsing is not to be
+  // trusted with rewrites it cannot use.
   assert.match(src, /interactive-widget=resizes-content/)
+  assert.match(src, /navigator\.userAgentData && navigator\.userAgentData\.brands/)
+  // The keyboard toggle also acts on touchend directly: iOS opens the
+  // software keyboard for programmatic focus most reliably in that context,
+  // and the synthetic click is swallowed so it cannot double-toggle.
+  assert.match(src, /kbd\.addEventListener\('touchend'/)
+  // The mobile toolbar exposes a live font-floor stepper: a wide mirrored
+  // grid cannot fit a phone at readable sizes, so the reader chooses the
+  // fit-versus-legibility tradeoff directly.
+  assert.match(src, /mobileFontFloor/)
+  assert.match(src, /data-tmux-cc-font-down/)
+  assert.match(src, /data-tmux-cc-font-up/)
   // Re-seeds preserve the reader's scrollback position instead of yanking
   // the viewport to the bottom.
   assert.match(src, /function writeSeed\(/)

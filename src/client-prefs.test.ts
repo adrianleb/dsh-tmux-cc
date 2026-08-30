@@ -31,6 +31,7 @@ test('browser preference migration applies defaults and strips unknown keys', ()
     session: '',
     fontFamily: '',
     fontSize: 12,
+    mobileFontFloor: 12,
     cursorStyle: 'block',
     cursorBlink: true,
     scrollbackLines: 2000,
@@ -46,6 +47,7 @@ test('browser preference migration applies defaults and strips unknown keys', ()
     session: 's'.repeat(250),
     fontFamily: 'mono;background:red',
     fontSize: 99,
+    mobileFontFloor: 99,
     cursorStyle: 'beam',
     cursorBlink: false,
     scrollbackLines: 999999,
@@ -60,6 +62,7 @@ test('browser preference migration applies defaults and strips unknown keys', ()
   assert.equal((normalized.session as string).length, 200)
   assert.equal(normalized.fontFamily, '')
   assert.equal(normalized.fontSize, 32)
+  assert.equal(normalized.mobileFontFloor, 24)
   assert.equal(normalized.cursorStyle, 'block')
   assert.equal(normalized.cursorBlink, false)
   assert.equal(normalized.scrollbackLines, 20000)
