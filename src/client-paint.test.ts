@@ -80,15 +80,29 @@ test('client bundle invariants', () => {
   assert.match(src, /data-tmux-cc-kbd/)
   assert.match(src, /if \(ev\.pointerType === 'touch' && !dockTerminalFocused\(\)\) return/)
   assert.match(src, /touchAction: 'none'/)
-  // Touch scrolling is natural-direction with momentum on both axes (rows and
-  // scrollback vertically, the overflowing grid horizontally), and holds
-  // repaints while a gesture is active (auto-expiring so a lost touchend
-  // cannot wedge painting).
+  // Touch scrolling is natural-direction with momentum on both axes (rows
+  // then synthetic wheels vertically, the overflowing grid horizontally),
+  // and holds repaints while a gesture is active (auto-expiring so a lost
+  // touchend cannot wedge painting).
   assert.match(src, /gestureGuard/)
   assert.match(src, /axis = dx > dy \? 'x' : 'y'/)
   assert.match(src, /const step = axis === 'x' \? lastX - x : lastY - y/)
   assert.match(src, /host\.scrollLeft = next/)
   assert.match(src, /requestAnimationFrame\(tick\)/)
+  // Gestures are owned exclusively by this plugin (capture + stopPropagation
+  // fences xterm's built-in touch handlers, which fight the drag and go dead
+  // under mouse reporting), are claimed on the FIRST touchmove (an
+  // unprevented first move lets iOS commit a visual-viewport pan and every
+  // later event turns non-cancelable), and scroll through synthetic wheel
+  // events so mouse-reporting programs, alternate buffers, and normal
+  // scrollback all behave — never through a mouse-tracking abort.
+  assert.match(src, /\{ capture: true, passive: false \}/)
+  assert.match(src, /new WheelEvent\('wheel'/)
+  assert.match(src, /DOM_DELTA_LINE/)
+  assert.doesNotMatch(src, /mouseTrackingMode/)
+  // The keyboard should resize the layout viewport where the browser allows
+  // it, removing the pan-steal range entirely.
+  assert.match(src, /interactive-widget=resizes-content/)
   // Re-seeds preserve the reader's scrollback position instead of yanking
   // the viewport to the bottom.
   assert.match(src, /function writeSeed\(/)
