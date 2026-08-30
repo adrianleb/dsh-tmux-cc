@@ -35,7 +35,7 @@ A persistent **tmux control-mode cockpit** for DeepSeek Harness Web. It attaches
 - **Non-disruptive sizing** — mirror mode uses `ignore-size` while another terminal is attached; takeover mode provides a crisp 1:1 grid when the dock is the only sizing client.
 - **Safe input transport** — input is forwarded byte-for-byte through hex-encoded `send-keys -H`, including Enter, paste, and Unicode.
 - **Multiple sessions and windows** — attach, detach, switch windows, or launch an optional named session recipe.
-- **Faithful mobile cockpit** — below 768px the dock becomes a full-screen drawer while preserving the real tmux pane grid and native pane zoom.
+- **Faithful mobile cockpit** — below 768px the dock becomes a full-screen drawer that preserves the real tmux pane grid and native pane zoom, keeps fonts at a readable floor with touch panning across the grid, and never lets the page scroll underneath it.
 - **Bilingual UI** — English and Simplified Chinese follow the DSH locale.
 - **No native dependencies** — the control channel uses plain stdin/stdout pipes.
 
@@ -91,21 +91,61 @@ pnpm run check
 1. Open the tmux dock.
 2. Choose a live tmux session from the dropdown. The plug button detaches or reattaches.
 3. Click a pane to focus it and type normally.
-4. With focus inside a pane, use `Ctrl+B` followed by arrows, `x`, `z`, `"`, or `%` for common tmux actions.
+4. With focus inside a pane, use the safe prefix and macOS shortcuts below.
 5. Drag the dock edge or pane sashes to resize; use the tabs to switch tmux windows.
 
 The plugin refuses to kill the final pane in a session.
+
+## Keyboard shortcuts
+
+Shortcut interception is active only while an xterm pane has focus; dock controls, the DSH composer, and the rest of the browser keep their normal keys.
+
+### Prefix map (all platforms)
+
+Press `Ctrl+B`, then:
+
+| Key | Action |
+| --- | --- |
+| Arrow | Select the pane in that direction |
+| `c` | Create a tmux window |
+| `n` / `p` | Select the next / previous tmux window |
+| `0`–`9` | Select the tmux window with that index |
+| `x` | Close the active pane, using the configured confirmation policy |
+| `z` | Toggle native tmux zoom |
+| `d` | Detach |
+| `"` / `%` | Split top/bottom / side-by-side |
+| `Ctrl+B` | Send a literal `Ctrl+B` to the active pane |
+
+A pending prefix expires after 1.5 seconds and is then forwarded literally. Unsupported follow-ups also forward the pending `Ctrl+B` before passing the follow-up to xterm.
+
+### iTerm2-compatible macOS map
+
+The following exact iTerm2 menu chords do not overlap DSH or documented Chrome shortcuts, so the plugin adapts them while an xterm is focused:
+
+| Shortcut | Action in this plugin |
+| --- | --- |
+| `⌃⇧⌘D` | Detach |
+| `⌃⇧⌘N` / `⌃⇧⌘T` | Create a tmux window (shown as a dock tab) |
+| `⌥⇧⌘N` / `⌥⇧⌘T` | Create a tmux window, adapting iTerm2's current-profile variants |
+| `⌥⌘X` | Close the focused pane using the configured confirmation policy |
+| `⇧⌘Return` | Toggle native tmux zoom |
+| `⌃⌘Arrow` | Resize the active pane one cell in that direction |
+| `⌥⇧⌘H` / `⌥⇧⌘V` | Split top/bottom / side-by-side |
+
+For a more comfortable optional pair, enable **Compact split shortcuts** under **Settings → tmux → Behavior & safety**: `⌥⌘D` splits side-by-side and `⌥⇧⌘D` splits top/bottom. This is off by default and stored per browser because some macOS configurations reserve `⌥⌘D` for showing or hiding the Dock; a chord intercepted by macOS cannot reach the page.
+
+Browser-reserved iTerm2 defaults are intentionally **not** intercepted: `⌘D` and `⇧⌘D` bookmark pages/tabs; `⌘W` and modifier variants can close a browser tab or window; `⌘[`/`⌘]` navigate history; and `⌥⌘Arrow` switches browser tabs. Pause Pane and Dashboard have no matching dock operation. See the [official iTerm2 tmux integration documentation](https://iterm2.com/documentation-tmux-integration.html).
 
 ## Mobile
 
 At viewport widths below 768px, the cockpit follows the narrow-layout pattern established by dsh-better-sidebar:
 
-- The dock becomes a full-screen floating drawer and stops pushing the DSH conversation layout.
+- The dock becomes a full-screen floating drawer sized to the **visual viewport** and stops pushing the DSH conversation layout. While it is open the page behind it is scroll-locked, and the un-cancellable browser-level panning that iOS performs with the keyboard open is tracked exactly, so the conversation underneath can never scroll or peek through.
 - Every tmux pane stays visible in its real tmux grid position; there is no separate client-side pane-tab or single-pane mode.
-- Tap a pane to select it, then use the toolbar zoom button or `Ctrl+B z`. This sends tmux's native `resize-pane -Z`; tapping it again restores the grid. Double-clicking a pane title performs the same native toggle.
-- Tapping a pane never opens the on-screen keyboard. The toolbar keyboard button summons and dismisses it explicitly, so scrolling and reading stay undisturbed.
-- One-finger drags scroll pane scrollback with natural direction and momentum; panes whose programs enable mouse reporting receive the gesture instead.
-- A narrow viewport is a pure mirror: it retracts any grid previously reported by that browser and never resizes the shared tmux window, so the keyboard opening or the URL bar collapsing cannot reflow other viewers or trigger refresh loops. Fonts scale to fit instead.
+- Fonts stop shrinking at a readable 12px floor instead of scaling the whole remote grid down to eyestrain sizes. A grid larger than its pane box becomes pannable: one-finger drags move it in both axes with momentum, vertical drags continue into xterm scrollback, and the view stays pinned to the prompt rows until you pan away. Panes whose programs enable mouse reporting receive the gesture instead.
+- Tap a pane to select it, then use the toolbar zoom button or `Ctrl+B z`. This sends tmux's native `resize-pane -Z`; tapping it again restores the grid. Double-tapping (or double-clicking) a pane title performs the same native toggle.
+- Tapping a pane never opens the on-screen keyboard. The toolbar keyboard button summons and dismisses it explicitly, so scrolling and reading stay undisturbed. While the keyboard is up, the session picker and window-tab rows collapse to give the terminal the space back, and focus follows pane taps so typing goes where you touched.
+- A narrow viewport is a pure mirror: it retracts any grid previously reported by that browser and never resizes the shared tmux window, so the keyboard opening or the URL bar collapsing cannot reflow other viewers or trigger refresh loops.
 - Dock and pane resize handles are disabled, the desktop side selector is hidden, and primary controls use 44px touch targets.
 - Safe-area padding supports notched devices, while `visualViewport` resize/scroll tracking keeps the terminal above the on-screen keyboard.
 - At 768px and wider, the complete desktop layout and resize controls return automatically.
@@ -114,7 +154,7 @@ At viewport widths below 768px, the cockpit follows the narrow-layout pattern es
 
 The mode changes automatically and is re-evaluated every five seconds:
 
-- **Mirror** — another sizing client is attached, such as a normal `tmux attach` or iTerm2 `-CC` client. The dock keeps `ignore-size`, never changes that client's geometry, renders each pane at its real cell size, and scales the font to fit.
+- **Mirror** — another sizing client is attached, such as a normal `tmux attach` or iTerm2 `-CC` client. The dock keeps `ignore-size`, never changes that client's geometry, renders each pane at its real cell size, and scales the font to fit (on mobile only down to the readable floor; beyond that the grid pans).
 - **Takeover** — only `ignore-size` clients are present. The dock reports its available grid with `refresh-client -C` and renders at the native font size. Only desktop-width viewers report a grid; mobile viewers always mirror.
 
 Opening another tmux client moves the dock back to mirror mode; closing it returns the dock to takeover mode when the host-wide policy is **Auto**. Choose **Mirror only** in **Settings → tmux → Behavior & safety** if this plugin should never resize tmux windows. Mobile viewers remain mirror-only under either policy.
@@ -125,7 +165,7 @@ Opening another tmux client moves the dock back to mirror mode; closing it retur
 
 - **Dock:** bottom/right placement, open/hide, and reset-to-defaults.
 - **Terminal:** font family, preferred size, cursor style/blinking, scrollback depth, and optional DSH code-font propagation. Mirror mode may shrink below the preferred font size to preserve the real grid.
-- **Behavior & safety:** durable host-wide **Auto / Mirror only** sizing policy and browser-local pane-close confirmation.
+- **Behavior & safety:** durable host-wide **Auto / Mirror only** sizing policy plus browser-local pane-close confirmation and optional compact split shortcuts.
 
 Browser-local settings are versioned in local storage and never broadcast to other viewers. Reset preserves whether the dock is open and the browser's selected session. The sizing policy is registered through DSH's settings service, so a writable loopback settings provider persists it in the normal settings document.
 

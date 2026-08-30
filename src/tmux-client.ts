@@ -248,8 +248,16 @@ export class TmuxControlClient extends EventEmitter<Events> {
     await this.refreshSnapshot()
   }
 
-  async split(dir: 'h' | 'v'): Promise<void> {
-    await this.command(`split-window ${dir === 'h' ? '-h' : '-v'}`)
+  async split(dir: 'h' | 'v', paneId: string): Promise<void> {
+    const flag = ({ h: '-h', v: '-v' } as const)[dir]
+    if (flag === undefined) throw new Error('invalid split direction')
+    const target = this.requireVisiblePane(paneId)
+    await this.command(`split-window -t ${quote(target)} ${flag}`)
+    await this.refreshSnapshot()
+  }
+
+  async newWindow(): Promise<void> {
+    await this.command('new-window')
     await this.refreshSnapshot()
   }
 
@@ -315,6 +323,15 @@ export class TmuxControlClient extends EventEmitter<Events> {
     this.scheduleRefresh()
   }
 
+  async resizePaneDirection(paneId: string, dir: 'L' | 'R' | 'U' | 'D', amount = 1): Promise<void> {
+    const flag = ({ L: 'L', R: 'R', U: 'U', D: 'D' } as const)[dir]
+    if (flag === undefined) throw new Error('invalid pane resize direction')
+    const target = this.requireVisiblePane(paneId)
+    const cells = Math.max(1, Math.min(100, Math.floor(Number(amount) || 1)))
+    await this.command(`resize-pane -t ${quote(target)} -${flag} ${cells}`)
+    this.scheduleRefresh()
+  }
+
   async refreshSnapshot(): Promise<TmuxSnapshot> {
     const win = await this.command(
       "display-message -p -F '#{window_id}\t#{window_name}\t#{window_width}\t#{window_height}\t#{window_visible_layout}\t#{window_zoomed_flag}\t#{session_name}'",
@@ -358,6 +375,13 @@ export class TmuxControlClient extends EventEmitter<Events> {
     this.snapshot = snap
     this.emit('snapshot', snap)
     return snap
+  }
+
+  private requireVisiblePane(paneId: unknown): string {
+    if (typeof paneId !== 'string' || !this.snapshot?.panes.some((pane) => pane.id === paneId)) {
+      throw new Error('pane is not visible in the attached tmux window')
+    }
+    return paneId
   }
 
   private scheduleRefresh(): void {

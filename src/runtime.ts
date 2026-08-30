@@ -508,10 +508,22 @@ export class TmuxRuntime {
     if (msg.type === 'select') { await client.selectPane(msg.pane); return }
     if (msg.type === 'select-window') { await client.selectWindow(msg.windowId); return }
     if (msg.type === 'zoom') { await client.zoom(msg.pane); return }
-    if (msg.type === 'split') { await client.split(msg.dir); return }
+    if (msg.type === 'split') {
+      if (typeof msg.pane !== 'string' || (msg.dir !== 'h' && msg.dir !== 'v')) throw new Error('invalid split request')
+      await client.split(msg.dir, msg.pane)
+      return
+    }
+    if (msg.type === 'new-window') { await client.newWindow(); return }
     if (msg.type === 'kill') { await client.killPane(msg.pane); return }
     if (msg.type === 'resize-pane') {
       await client.resizePane(msg.pane, { width: msg.width, height: msg.height })
+      return
+    }
+    if (msg.type === 'resize-pane-dir') {
+      if (typeof msg.pane !== 'string' || !['L', 'R', 'U', 'D'].includes(msg.dir)) {
+        throw new Error('invalid directional pane resize request')
+      }
+      await client.resizePaneDirection(msg.pane, msg.dir, msg.amount)
       return
     }
     if (msg.type === 'select-dir') { await client.selectDir(msg.dir) }

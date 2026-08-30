@@ -225,6 +225,40 @@ test('sizing commands clamp grids and takeover atomically', async () => {
   ])
 })
 
+test('iTerm-compatible create and directional resize emit native tmux commands', async () => {
+  const fake = new FakeTransport()
+  scriptedAttach(fake)
+  const client = makeClient(fake)
+  const p = client.attach('verify')
+  fake.feed('%begin 1 99 0\n%end 1 99 0\n')
+  await p
+
+  fake.writes = []
+  await client.split('h', '%5')
+  assert.equal(fake.writes[0], "split-window -t '%5' -h\n")
+
+  fake.writes = []
+  await client.newWindow()
+  assert.equal(fake.writes[0], 'new-window\n')
+  assert.ok(fake.writes.some(line => line.startsWith('display-message')))
+
+  fake.writes = []
+  await client.resizePaneDirection('%5', 'L', 999)
+  assert.equal(fake.writes[0], "resize-pane -t '%5' -L 100\n")
+  fake.writes = []
+  await assert.rejects(client.split('v', '%999'), /pane is not visible/)
+  await assert.rejects(client.split('bogus' as 'h', '%5'), /invalid split direction/)
+  await assert.rejects(client.split('h', undefined as unknown as string), /pane is not visible/)
+  await assert.rejects(client.resizePaneDirection('%999', 'U'), /pane is not visible/)
+  assert.deepEqual(fake.writes, [])
+  await assert.rejects(
+    client.resizePaneDirection('%5', 'L; kill-server' as 'L'),
+    /invalid pane resize direction/,
+  )
+  assert.deepEqual(fake.writes, [])
+  client.detach()
+})
+
 test('sendKeys hex-encodes every byte so CR/LF cannot split the protocol', async () => {
   const fake = new FakeTransport()
   scriptedAttach(fake)

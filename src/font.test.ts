@@ -19,5 +19,6 @@ test('default dock prefs leave fontFamily empty (client supplies the system stac
   assert.equal(DEFAULT_PREFS.cursorBlink, true)
   assert.equal(DEFAULT_PREFS.scrollbackLines, 2000)
   assert.equal(DEFAULT_PREFS.confirmKill, true)
+  assert.equal(DEFAULT_PREFS.compactSplitShortcuts, false)
   assert.equal(DEFAULT_PREFS.applyFontToHarness, false)
 })

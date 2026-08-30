@@ -35,6 +35,7 @@ test('browser preference migration applies defaults and strips unknown keys', ()
     cursorBlink: true,
     scrollbackLines: 2000,
     confirmKill: true,
+    compactSplitShortcuts: false,
     applyFontToHarness: false,
   })
 
@@ -49,6 +50,7 @@ test('browser preference migration applies defaults and strips unknown keys', ()
     cursorBlink: false,
     scrollbackLines: 999999,
     confirmKill: false,
+    compactSplitShortcuts: true,
     applyFontToHarness: true,
     injected: 'never persisted',
   })
@@ -62,8 +64,32 @@ test('browser preference migration applies defaults and strips unknown keys', ()
   assert.equal(normalized.cursorBlink, false)
   assert.equal(normalized.scrollbackLines, 20000)
   assert.equal(normalized.confirmKill, false)
+  assert.equal(normalized.compactSplitShortcuts, true)
   assert.equal(normalized.applyFontToHarness, true)
   assert.equal(Object.hasOwn(normalized, 'injected'), false)
+})
+
+test('versioned preference documents migrate without resetting existing values', () => {
+  const defaults = clientSource.match(/const defaultPrefs = (\{[\s\S]*?\n    \})/)
+  assert.ok(defaults)
+  const load = Function(`
+    const PREFS_VERSION = 3
+    const STORE_KEY = 'test'
+    const MAX_SCROLLBACK_LINES = 20000
+    const defaultPrefs = ${defaults[1]}
+    let stored = ''
+    const localStorage = { getItem: () => stored }
+    ${functionSource('sanitizeFontFamily')}
+    ${functionSource('normalizeLocalPrefs')}
+    ${functionSource('loadPrefs')}
+    return value => { stored = JSON.stringify(value); return loadPrefs() }
+  `)() as (value: unknown) => Record<string, unknown>
+
+  const migrated = load({ version: 2, prefs: { open: true, session: 'kept', confirmKill: false } })
+  assert.equal(migrated.open, true)
+  assert.equal(migrated.session, 'kept')
+  assert.equal(migrated.confirmKill, false)
+  assert.equal(migrated.compactSplitShortcuts, false)
 })
 
 test('kill confirmation arms the first action and accepts the repeated action', () => {

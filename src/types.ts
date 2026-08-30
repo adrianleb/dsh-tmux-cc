@@ -36,6 +36,8 @@ export interface DockPrefs {
   scrollbackLines: number
   /** Require an explicit second action before sending kill-pane. */
   confirmKill: boolean
+  /** Enable best-effort ⌥⌘D / ⌥⇧⌘D split shortcuts in this browser. */
+  compactSplitShortcuts: boolean
   /**
    * When true, the client also sets DSH's `--ds-font-family-code` (and
    * `--dsw-font-mono`) to the resolved terminal stack so code in the harness
@@ -55,6 +57,7 @@ export const DEFAULT_PREFS: DockPrefs = {
   cursorBlink: true,
   scrollbackLines: 2000,
   confirmKill: true,
+  compactSplitShortcuts: false,
   applyFontToHarness: false,
 }
 
@@ -138,10 +141,12 @@ export type ClientToHost =
   | { type: 'resize'; active: false }
   | { type: 'select'; pane: string }
   | { type: 'zoom'; pane?: string }
-  | { type: 'split'; dir: 'h' | 'v' }
+  | { type: 'split'; pane: string; dir: 'h' | 'v' }
   | { type: 'kill'; pane?: string }
   | { type: 'resize-pane'; pane: string; width?: number; height?: number }
+  | { type: 'resize-pane-dir'; pane: string; dir: 'L' | 'R' | 'U' | 'D'; amount?: number }
   | { type: 'select-dir'; dir: 'L' | 'R' | 'U' | 'D' }
+  | { type: 'new-window' }
   | { type: 'attach'; session: string }
   | { type: 'select-window'; windowId: string }
   | { type: 'detach' }

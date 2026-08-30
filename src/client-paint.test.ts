@@ -29,8 +29,9 @@ test('client bundle invariants', () => {
   assert.deepEqual(paneVisualBox({ left: 80, top: 24, width: 80, height: 24 }, 160, 48), {
     left: 80, top: 24, width: 80, height: 24,
   })
-  // Keyboard handling is scoped to the dock, never window-global stealing.
-  assert.match(src, /host\.contains\(event\.target\)/)
+  // Keyboard handling is scoped to an actual xterm focus, never DSH controls.
+  assert.match(src, /host\.contains\(target\)/)
+  assert.match(src, /target\.closest\('\.xterm'\)/)
   // Reconnect re-seeds from an authoritative capture.
   assert.match(src, /type: 'capture'/)
   assert.match(src, /maybeAutoAttach/)
@@ -47,12 +48,12 @@ test('client bundle invariants', () => {
   assert.match(src, /applyFontToHarness/)
   assert.match(src, /--ds-font-family-code/)
   assert.match(src, /queryLocalFonts/)
-  // Mobile: a real narrow breakpoint and full-screen drawer with visual
-  // keyboard insets, while preserving the actual tmux pane grid.
+  // Mobile: a real narrow breakpoint and a drawer sized to the visual
+  // viewport, while preserving the actual tmux pane grid.
   assert.match(src, /NARROW_MAX_WIDTH = 768/)
   assert.match(src, /@media \(max-width:767px\)/)
   assert.match(src, /window\.visualViewport/)
-  assert.match(src, /vv\.height \+ \(vv\.offsetTop/)
+  assert.match(src, /function mobileViewportBox\(/)
   assert.match(src, /prefs\.open && !isNarrowViewport\(\)/)
   assert.match(src, /data-mobile="1"/)
   assert.doesNotMatch(src, /data-tmux-cc-pane-tabs/)
@@ -74,23 +75,42 @@ test('client bundle invariants', () => {
   assert.match(src, /store\.requestKill\('active'\)/)
   assert.doesNotMatch(src, /lastPointerType/)
   // Touch: taps never summon the on-screen keyboard implicitly; the toolbar
-  // keyboard toggle does, and terminals opt out of native panning.
+  // keyboard toggle does, and terminals opt out of native panning. Once the
+  // keyboard is up, focus follows the tap so typing goes to the touched pane.
   assert.match(src, /data-tmux-cc-kbd/)
-  assert.match(src, /if \(ev\.pointerType === 'touch'\) return/)
+  assert.match(src, /if \(ev\.pointerType === 'touch' && !dockTerminalFocused\(\)\) return/)
   assert.match(src, /touchAction: 'none'/)
-  // Touch scrolling is natural-direction with momentum, and holds repaints
-  // while a gesture is active (auto-expiring so a lost touchend cannot wedge).
+  // Touch scrolling is natural-direction with momentum on both axes (rows and
+  // scrollback vertically, the overflowing grid horizontally), and holds
+  // repaints while a gesture is active (auto-expiring so a lost touchend
+  // cannot wedge painting).
   assert.match(src, /gestureGuard/)
-  assert.match(src, /const step = lastY - y/)
+  assert.match(src, /axis = dx > dy \? 'x' : 'y'/)
+  assert.match(src, /const step = axis === 'x' \? lastX - x : lastY - y/)
+  assert.match(src, /host\.scrollLeft = next/)
   assert.match(src, /requestAnimationFrame\(tick\)/)
   // Re-seeds preserve the reader's scrollback position instead of yanking
   // the viewport to the bottom.
   assert.match(src, /function writeSeed\(/)
   assert.match(src, /scrollLines\(-fromBottom\)/)
-  // Visual-viewport inset jitter under 2px never repositions the shell, and
-  // horizontal panning is accounted for as well as keyboard height.
-  assert.match(src, /insetTop/)
+  // The mobile drawer is sized to the visual viewport with sub-2px size
+  // hysteresis (a size write re-fits fonts), while browser-level panning —
+  // the un-cancellable keyboard/URL-bar kind — is tracked exactly through a
+  // transform that can never trigger a re-fit. The document behind the
+  // drawer is locked and stray scrolls snap back.
+  assert.match(src, /vpWidth/)
   assert.match(src, /vv\.offsetLeft/)
+  assert.match(src, /translate\(\$\{tx\}px, \$\{ty\}px\)/)
+  assert.match(src, /data-dsh-tmux-mobile-lock/)
+  assert.match(src, /window\.scrollTo\(0, 0\)/)
+  assert.match(src, /touch-action:none;overscroll-behavior:none/)
+  // Readable mobile floor: fitting stops shrinking at MOBILE_MIN_FONT and the
+  // grid overflow becomes pannable instead (pinned to the prompt rows).
+  assert.match(src, /MOBILE_MIN_FONT = 12/)
+  assert.match(src, /function syncPaneOverflow\(/)
+  assert.match(src, /vPinned/)
+  // With the on-screen keyboard up the session/tab rows collapse.
+  assert.match(src, /data-kbd="1"/)
   // The font fit is a one-step, one-degree-of-freedom calculation. The former
   // lineHeight/letterSpacing fixed-point recursion had a period-2 limit cycle.
   assert.match(src, /function fittedFontSize\(/)
@@ -101,10 +121,15 @@ test('client bundle invariants', () => {
   assert.ok(fitSource)
   const fittedFontSize = Function(`return (${fitSource})`)() as (
     current: number, screenWidth: number, screenHeight: number, hostWidth: number, hostHeight: number,
+    preferred?: number, minimum?: number,
   ) => number
   assert.equal(fittedFontSize(12, 240, 240, 188, 300), 9.25)
   assert.equal(fittedFontSize(12, 240, 240, 240, 240), 12)
   assert.equal(fittedFontSize(12, 240, 240, 1000, 1000), 18)
+  // The mobile floor wins over shrink-to-fit; a preferred size below the
+  // floor is still honored as the ceiling.
+  assert.equal(fittedFontSize(12, 240, 240, 60, 60, 18, 12), 12)
+  assert.equal(fittedFontSize(9, 240, 240, 60, 60, 9, 9), 9)
   // Layout push is stylesheet-owned and additive with better-sidebar. No
   // inline margins remain on DSH's center column or AppFrame.
   assert.match(src, /data-dsh-tmux-conversation/)
@@ -119,7 +144,7 @@ test('client bundle invariants', () => {
   assert.match(src, /store\.dispose\(\)/)
   // Presentation preferences are versioned, explicitly normalized, and never
   // sent through the shared websocket.
-  assert.match(src, /PREFS_VERSION = 2/)
+  assert.match(src, /PREFS_VERSION = 3/)
   assert.match(src, /function normalizeLocalPrefs\(/)
   assert.match(src, /JSON\.stringify\(\{ version: PREFS_VERSION, prefs \}\)/)
   assert.doesNotMatch(src, /send\(\{ type: 'prefs'/)

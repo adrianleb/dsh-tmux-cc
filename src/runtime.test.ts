@@ -66,6 +66,11 @@ class FakeTmuxClient {
     if (this.captureGate !== null) await this.captureGate
     return [{ pane: pane ?? '%1', data: `history:${String(lines)}` }]
   }
+  async newWindow(): Promise<void> { this.calls.push('new-window') }
+  async split(dir: string, pane?: string): Promise<void> { this.calls.push(`split:${dir}:${String(pane)}`) }
+  async resizePaneDirection(pane: string, dir: string, amount?: number): Promise<void> {
+    this.calls.push(`resize-dir:${pane}:${dir}:${String(amount)}`)
+  }
 }
 
 test('a browser retracting its grid returns the tmux client to mirror mode', async () => {
@@ -340,6 +345,30 @@ test('a pane capture failure is reported while later pane captures continue', as
     { type: 'error', message: 'history capture failed for %1: capture timeout' },
     { type: 'history', pane: '%2', data: 'second history' },
   ])
+})
+
+test('shortcut protocol dispatches new-window and directional pane resize', async () => {
+  const runtime = new TmuxRuntime({ tmuxBin: 'tmux' })
+  const fakeClient = new FakeTmuxClient()
+  const socket = new FakeSocket()
+  const internals = runtime as unknown as {
+    client: FakeTmuxClient
+    handle(socket: SocketLike, raw: string): Promise<void>
+  }
+  internals.client = fakeClient
+
+  await internals.handle(socket, JSON.stringify({ type: 'new-window' }))
+  await internals.handle(socket, JSON.stringify({ type: 'split', dir: 'h', pane: '%5' }))
+  await internals.handle(socket, JSON.stringify({ type: 'resize-pane-dir', pane: '%5', dir: 'U', amount: 1 }))
+  assert.deepEqual(fakeClient.calls, ['new-window', 'split:h:%5', 'resize-dir:%5:U:1'])
+
+  await assert.rejects(internals.handle(socket, JSON.stringify({ type: 'split', dir: 'h' })), /invalid split request/)
+  await assert.rejects(internals.handle(socket, JSON.stringify({ type: 'split', dir: 'bogus', pane: '%5' })), /invalid split request/)
+  await assert.rejects(
+    internals.handle(socket, JSON.stringify({ type: 'resize-pane-dir', pane: '%5', dir: 'bogus' })),
+    /invalid directional pane resize request/,
+  )
+  assert.deepEqual(fakeClient.calls, ['new-window', 'split:h:%5', 'resize-dir:%5:U:1'])
 })
 
 test('history capture replies only to the requesting browser', async () => {

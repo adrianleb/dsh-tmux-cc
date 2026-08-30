@@ -4,6 +4,29 @@ All notable changes to dsh-tmux-cc are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- A browser-safe subset of iTerm2's native tmux shortcuts is available on macOS while an xterm pane has focus: dedicated detach/new-window actions, `⌥⌘X` focused-pane close, pane zoom, one-cell directional resize, and split chords.
+- The `Ctrl+B` map now includes new window (`c`), next/previous window (`n`/`p`), indexed window selection (`0`–`9`), and detach (`d`), with literal-prefix forwarding on `Ctrl+B Ctrl+B`.
+- A browser-local opt-in enables compact split chords: `⌥⌘D` for side-by-side and `⌥⇧⌘D` for top/bottom, with an explicit macOS Dock-shortcut warning.
+- Mobile fonts stop shrinking at a readable 12px floor. A tmux grid larger than its pane box becomes pannable instead: one-finger drags move it in both axes with momentum, vertical drags continue into xterm scrollback, and the view stays pinned to the prompt rows until the reader pans away.
+- Double-tapping a pane title on a touch screen now triggers native tmux zoom, matching the documented double-click behavior (iOS does not reliably synthesize `dblclick`).
+- While the on-screen keyboard is up, the mobile session picker and window-tab rows collapse to return that space to the terminal, and focus follows pane taps so typing goes to the pane that was touched.
+
+### Changed
+
+- Keyboard interception is restricted to an actually focused xterm, requires exact modifiers, expires pending prefixes after 1.5 seconds, and restores literal `Ctrl+B` for unsupported follow-ups.
+- Collision-prone direct `Alt+Arrow` handling was removed. Browser-reserved iTerm2 chords such as `⌘D`, all `⌘W` variants, `⌘[/]`, and `⌥⌘Arrow` are deliberately left to the browser.
+- The mobile drawer is now sized to the visual viewport and repositioned with a transform, separating placement from sizing: tracking keyboard/URL-bar panning can no longer resize the shell or re-fit fonts mid-scroll.
+
+### Fixed
+
+- The page behind the open mobile drawer can no longer scroll: the document is scroll-locked, the drawer fences all touches with `touch-action: none` (re-enabling `pan-x` only for its own toolbar rows), and browser-level visual-viewport panning — the un-cancellable kind iOS performs while the keyboard is open — is tracked exactly instead of exposing the conversation underneath.
+- iOS "reveal the caret" auto-scrolling of `overflow: hidden` ancestors after focusing a terminal is detected and undone, so opening the keyboard no longer shoves pane content out of its box or desyncs the fixed plugin root.
+- Touch drags that started horizontally used to do nothing; they now pan the grid. Vertical drags scroll the pane content itself rather than the page.
+
 ## [0.6.0] - 2026-08-29
 
 ### Added
