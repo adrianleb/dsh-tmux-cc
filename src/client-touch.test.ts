@@ -186,3 +186,32 @@ test('gesture listeners are capture-phase so xterm cannot preempt them', () => {
   }
   assert.equal(listeners.get('touchmove')?.passive, false, 'touchmove can preventDefault')
 })
+
+test('the stable touch layer receives the same gesture handlers', () => {
+  // Touch events are target-locked to the element under the finger at
+  // touchstart; xterm's DOM renderer replaces its row elements on every
+  // render, so on a streaming pane the touched span detaches and the rest
+  // of the gesture stops propagating — every drag died after ~one move.
+  // The transparent layer above the terminal is never re-rendered, so the
+  // full gesture must arrive through IT.
+  const { host, wheels } = makeHost({
+    scrollHeight: 300, clientHeight: 300, scrollWidth: 300, clientWidth: 300,
+    screenHeight: 280, // 20 rows -> 14px per row
+  })
+  const layerListeners = new Map<string, Listener>()
+  const layer = {
+    addEventListener(type: string, fn: (ev: unknown) => void, options?: { capture?: boolean; passive?: boolean }) {
+      layerListeners.set(type, { fn, capture: !!options?.capture, passive: !!options?.passive })
+    },
+  }
+  const rec = { termHost: host, touchLayer: layer, term: { rows: 20 }, vPinned: true }
+  bindTouchScroll(rec)
+  for (const type of ['touchstart', 'touchmove', 'touchend', 'touchcancel']) {
+    assert.ok(layerListeners.get(type), `${type} bound on the touch layer`)
+  }
+  // A drag delivered exclusively through the layer scrolls the pane.
+  layerListeners.get('touchstart')!.fn(touchEvent(100, 300, 0))
+  layerListeners.get('touchmove')!.fn(touchEvent(100, 260, 16))
+  assert.equal(wheels.length, 1)
+  assert.equal(wheels[0].deltaY, 2)
+})

@@ -100,6 +100,13 @@ test('client bundle invariants', () => {
   assert.match(src, /new WheelEvent\('wheel'/)
   assert.match(src, /DOM_DELTA_LINE/)
   assert.doesNotMatch(src, /mouseTrackingMode/)
+  // Gestures land on a stable layer above xterm's rows: touch events are
+  // target-locked at touchstart, and the DOM renderer replacing the touched
+  // row span mid-gesture silently ended every drag on a streaming pane.
+  // The layer shows only on mobile and forwards real mouse wheels through.
+  assert.match(src, /data-tmux-cc-touch/)
+  assert.match(src, /\[data-tmux-cc-shell\]\[data-mobile="1"\] \[data-tmux-cc-touch\]\{display:block\}/)
+  assert.match(src, /for \(const surface of \[rec\.touchLayer, host\]\)/)
   // The keyboard should resize the layout viewport where the browser allows
   // it, removing the pan-steal range entirely.
   assert.match(src, /interactive-widget=resizes-content/)
