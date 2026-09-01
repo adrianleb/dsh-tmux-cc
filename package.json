@@ -80,8 +80,8 @@
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
-    "@types/node": "^22.10.0",
+    "@types/node": "^26.4.0",
     "@types/ws": "^8.5.10",
-    "typescript": "^5.6.0"
+    "typescript": "^7.0.2"
   }
 }
