@@ -1,4 +1,12 @@
 import { test, expect } from '@playwright/test'
+import { createHash } from 'node:crypto'
+import { readFileSync } from 'node:fs'
+
+const hash = (data: string | Buffer) => createHash('sha256').update(data).digest('hex')
+const xtermAssets = Object.fromEntries(['js', 'css'].map(ext => [
+  `/tmux-cc/vendor/xterm.${ext}`,
+  hash(readFileSync(new URL(`../../node_modules/@xterm/xterm/${ext === 'js' ? 'lib' : 'css'}/xterm.${ext}`, import.meta.url))),
+]))
 
 // Optional integration with the EXISTING DSH URL, never a replacement server.
 // Intercept tmux's transport before navigation: no test input, resize, swap or
@@ -34,15 +42,21 @@ for (const mobile of [false, true]) {
     })
     await page.addInitScript(() => localStorage.setItem('dsh-tmux-cc:dock', JSON.stringify({ prefs: { open: true, confirmKill: false, size: 500 } })))
     const bundles: Promise<boolean>[] = []
+    const vendorAssets: Promise<{ path: string; digest: string }>[] = []
     page.on('response', response => {
       if (response.url().includes('/plugins/') && response.url().includes('dsh-tmux-cc/client.js')) {
         bundles.push(response.text().then(text => text.includes('function bindPaneTitle') && text.includes('function confirmPaneClose') && text.includes('function openManager')))
       }
+      const path = new URL(response.url()).pathname
+      if (path in xtermAssets) vendorAssets.push(response.body().then(data => ({ path, digest: hash(data) })))
     })
     await page.goto(process.env.DSH_GUI_URL!)
     await expect(page.locator('[data-tmux-cc-pane]')).toHaveCount(4)
     expect((await Promise.all(bundles)).some(Boolean)).toBe(true)
     await expect(page.locator('.xterm')).toHaveCount(4)
+    // An upgraded checkout must not silently test an older host-cached xterm.
+    const served = Object.fromEntries((await Promise.all(vendorAssets)).map(asset => [asset.path, asset.digest]))
+    expect(served).toEqual(xtermAssets)
     // Verify the installed GUI exposes BOTH native divider directions for touch.
     // No command is forwarded to the running tmux server by this mock socket.
     for (const axis of ['x', 'y'] as const) {

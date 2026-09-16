@@ -1,0 +1,6 @@
+# Keep pnpm's default release-age checks and require review for future exceptions.
+minimumReleaseAgeStrict: true
+minimumReleaseAgeExclude:
+  # Reviewed typings-only patch: additive child_process.fork options, no scripts;
+  # registry signatures and tarball integrity verified before inclusion.
+  - '@types/node@22.20.3'

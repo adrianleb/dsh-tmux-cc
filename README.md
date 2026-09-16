@@ -50,10 +50,10 @@ A persistent **tmux control-mode cockpit** for DeepSeek Harness Web. Create sess
 
 ## Install
 
-**v0.7.0 is a GitHub-only release.** Install its prebuilt package:
+**v0.7.1 is a GitHub-only release.** Install its prebuilt package:
 
 ```bash
-dsh plugin --profile web add https://github.com/adrianleb/dsh-tmux-cc/releases/download/v0.7.0/dsh-tmux-cc-0.7.0.tgz
+dsh plugin --profile web add https://github.com/adrianleb/dsh-tmux-cc/releases/download/v0.7.1/dsh-tmux-cc-0.7.1.tgz
 ```
 
 The npm channel remains at v0.6.0:

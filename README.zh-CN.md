@@ -50,10 +50,10 @@
 
 ## 安装
 
-**v0.7.0 仅在 GitHub 发布。** 安装此版本的预构建包：
+**v0.7.1 仅在 GitHub 发布。** 安装此版本的预构建包：
 
 ```bash
-dsh plugin --profile web add https://github.com/adrianleb/dsh-tmux-cc/releases/download/v0.7.0/dsh-tmux-cc-0.7.0.tgz
+dsh plugin --profile web add https://github.com/adrianleb/dsh-tmux-cc/releases/download/v0.7.1/dsh-tmux-cc-0.7.1.tgz
 ```
 
 npm 渠道仍为 v0.6.0：

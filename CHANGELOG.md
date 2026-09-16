@@ -6,6 +6,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-09-16
+
+### Changed
+
+- Upgrade `@xterm/xterm` from 5.5.0 to 6.0.0, retaining the plugin's touch scrolling, two-axis pane resizing, keyboard-focus handling, and pane-management interactions.
+- Upgrade TypeScript from 5.9.3 to 7.0.2 and pin pnpm 12.4.2 with its generated toolchain/dependency lockfile.
+- Update Schemastery to 3.18.2, the development Cordis dependency to 4.0.2, and Node 22 typings to 22.20.3. Keep the compatible Cordis peer range and Node 22 runtime support; align WebSocket dependency minimums with the already-tested versions.
+- Check npm dependencies and GitHub Actions weekly with Dependabot. Keep Node typings on their supported major, and separate major compiler upgrades from routine development dependency groups.
+- Upgrade browser trace uploads to `actions/upload-artifact@v7`.
+
+### Removed
+
+- Remove the unused `@deepseek-ai/dsh-settings` dependency and its obsolete transitive settings packages; settings registration continues through the host-provided service.
+
+### Added
+
+- Verify the exact xterm JavaScript and CSS served by the existing GUI against the installed dependency, preventing stale host-cached assets from silently passing upgrade checks. Restart DSH Web after dependency upgrades, then refresh browser tabs.
+
 ## [0.7.0] - 2026-09-15
 
 ### Added
@@ -191,7 +209,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Switched input to byte-safe, hex-encoded `send-keys -H` commands.
 - Paired control replies by tmux block tags and added command timeouts.
 
-[Unreleased]: https://github.com/adrianleb/dsh-tmux-cc/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/adrianleb/dsh-tmux-cc/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/adrianleb/dsh-tmux-cc/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/adrianleb/dsh-tmux-cc/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/adrianleb/dsh-tmux-cc/compare/v0.5.4...v0.6.0
 [0.5.4]: https://github.com/adrianleb/dsh-tmux-cc/compare/v0.5.3...v0.5.4

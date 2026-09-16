@@ -2,9 +2,13 @@
 
 ## Release validation
 
-The v0.7.0 interaction suite passed **143 unit tests**, **58 Chromium/WebKit browser tests**, and **2 isolated native tmux integration tests on both tmux 3.4 and 3.7b**, plus TypeScript and build checks. Two expected WebKit skips cover Chromium-only CDP input tests.
+The v0.7.1 dependency upgrade passed **143 unit tests**, **58 Chromium/WebKit browser tests**, and **2 isolated native tmux integration tests on both tmux 3.4 and 3.7b**, plus TypeScript 7.0.2 and build checks under Node 22. Two expected WebKit skips cover Chromium-only CDP input tests.
 
-The touch-resize browser checks also passed three repetitions: 15 successful executions and three expected WebKit CDP skips. The existing DSH GUI was checked on desktop and mobile in both browser engines using synthetic terminal transport, without moving, resizing, closing, or typing into operator panes.
+Touch resizing, scrolling, and keyboard-focus checks also passed three repetitions: 30 successful executions and six expected WebKit CDP skips. The existing DSH GUI was checked on desktop and mobile in both browser engines using synthetic terminal transport, without moving, resizing, closing, or typing into operator panes.
+
+The live-GUI tests compare both served xterm asset hashes against the installed xterm 6.0.0 package. They initially caught the running host's cached 5.5 assets; after restarting the existing DSH Web process, all four live-GUI cases passed with matching JavaScript and CSS. The tmux server and existing pane processes were preserved through that restart.
+
+Frozen installation with pnpm 12.4.2 passed; `pnpm outdated` reported no stale direct dependencies and `pnpm audit` reported zero known vulnerabilities. Node typings remain on the supported 22.x line. The exact-version release-age exception for `@types/node@22.20.3` was reviewed as a typings-only additive patch, with registry signatures and tarball integrity checked; future exceptions require explicit review.
 
 ## Reproduce the checks
 
@@ -46,7 +50,7 @@ Browser tests use the shipped xterm with synthetic terminals. Existing-GUI check
 
 ## Upgrade and device checks
 
-After installing the release, restart the existing DSH Web process to load the server changes, then refresh browser tabs to load the client. Updating only the browser source in a development checkout requires a refresh unless the matching client build watcher is running.
+After installing the release, restart the existing DSH Web process to load server and vendor-dependency changes, then refresh browser tabs to load the client. A browser refresh alone can still receive host-cached xterm assets after a dependency upgrade. Updating only the browser source in a development checkout requires a refresh unless the matching client build watcher is running.
 
 Headless Chromium/WebKit cannot summon an actual iOS or Android software keyboard. Viewport changes and focus are tested, but OS keyboard animation and browser chrome still need physical-device testing:
 
