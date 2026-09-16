@@ -2,7 +2,7 @@
 
 [简体中文](./README.zh-CN.md) · English
 
-A persistent **tmux control-mode cockpit** for DeepSeek Harness Web. It attaches to an existing tmux session with `tmux -C`, renders every pane with xterm.js, and stays visible when you switch chats.
+A persistent **tmux control-mode cockpit** for DeepSeek Harness Web. Create sessions or attach to existing ones with `tmux -C`, manage attached clients, render every pane with xterm.js, and keep the dock visible when you switch chats.
 
 [![CI](https://github.com/adrianleb/dsh-tmux-cc/actions/workflows/ci.yml/badge.svg)](https://github.com/adrianleb/dsh-tmux-cc/actions/workflows/ci.yml)
 [![DSH plugin](https://img.shields.io/badge/dsh-plugin-5a67d8)](https://github.com/topics/dsh-plugin)
@@ -34,7 +34,8 @@ A persistent **tmux control-mode cockpit** for DeepSeek Harness Web. It attaches
 - **Native tmux panes** — pane layout, window tabs, focus, zoom, splits, and resizing stay synchronized with tmux.
 - **Non-disruptive sizing** — mirror mode uses `ignore-size` while another terminal is attached; takeover mode provides a crisp 1:1 grid when the dock is the only sizing client.
 - **Safe input transport** — input is forwarded byte-for-byte through hex-encoded `send-keys -H`, including Enter, paste, and Unicode.
-- **Multiple sessions and windows** — attach, detach, switch windows, or launch an optional named session recipe.
+- **Session management** — create sessions with an optional starting directory, rename or attach existing sessions, switch windows, or launch an optional named session recipe.
+- **Attached-client management** — inspect all native clients on the configured tmux server, filter by session, and safely detach selected clients without stopping their processes.
 - **Faithful mobile cockpit** — below 768px the dock becomes a full-screen drawer that preserves the real tmux pane grid and native pane zoom, keeps fonts at a readable floor with touch panning across the grid, and never lets the page scroll underneath it.
 - **Bilingual UI** — English and Simplified Chinese follow the DSH locale.
 - **No native dependencies** — the control channel uses plain stdin/stdout pipes.
@@ -44,18 +45,24 @@ A persistent **tmux control-mode cockpit** for DeepSeek Harness Web. It attaches
 - [DeepSeek Harness](https://github.com/deepseek-ai/DeepSeek-Harness) with a Web profile
 - Node.js 22 or newer
 - pnpm (Corepack is recommended)
-- tmux installed on the same host as DSH (tested with tmux 3.7b)
+- tmux installed on the same host as DSH (tested with tmux 3.4 and 3.7b)
 - Linux or macOS
 
 ## Install
 
-From npm (recommended, prebuilt):
+**v0.7.0 is a GitHub-only release.** Install its prebuilt package:
+
+```bash
+dsh plugin --profile web add https://github.com/adrianleb/dsh-tmux-cc/releases/download/v0.7.0/dsh-tmux-cc-0.7.0.tgz
+```
+
+The npm channel remains at v0.6.0:
 
 ```bash
 dsh plugin --profile web add dsh-tmux-cc
 ```
 
-From GitHub:
+From the GitHub source:
 
 ```bash
 dsh plugin --profile web add github:adrianleb/dsh-tmux-cc
@@ -92,9 +99,21 @@ pnpm run check
 2. Choose a live tmux session from the dropdown. The plug button detaches or reattaches.
 3. Click a pane to focus it and type normally.
 4. With focus inside a pane, use the safe prefix and macOS shortcuts below.
-5. Drag the dock edge or pane sashes to resize; use the tabs to switch tmux windows.
+5. Drag a pane's title onto another pane to swap their positions (desktop or mobile). Drag the dividers between panes to resize with a mouse or finger in either direction. The outer dock edge is resizable on desktop only; use the tabs to switch tmux windows.
 
 The plugin refuses to kill the final pane in a session.
+
+### Sessions & clients
+
+Open **Sessions & clients** from the dock toolbar (the grid/plus icon). It works even when the dock is detached or no sessions exist.
+
+- **Create session:** enter a unique name and optionally an existing absolute directory on the DSH host. The new session starts the host's default shell; leave **Attach after creating** unchecked to keep it detached. Names may contain spaces or Unicode, but not dots, colons, semicolons, or control characters (maximum 200 characters). Names that would shadow a configured recipe ID for a different session are reserved.
+- **Sessions:** see window/client counts, attach, or rename a session inline. Attaching switches the shared dock for every browser viewer. Rename does not restart processes.
+- **Attached clients:** see native client names, session, PID, terminal/TTY, size, flags, and connection time across the configured tmux server—not other tmux sockets. Browser tabs share one control client and are not separate entries.
+- Filter by session, select individual clients or **Select all**, then choose **Detach selected** and confirm the listed targets. Changing the filter clears selection. The host checks each client's name, PID, and creation time so a stale selection cannot silently target a replacement client.
+- **This dock (shared)** is listed but cannot be bulk-detached. Use the dock's existing **Detach** button to disconnect its shared control client. Detaching never kills sessions or their running processes; there is deliberately no kill-session or kill-server button.
+
+The manager refreshes every five seconds while visible and idle; **Refresh** reloads immediately. Errors stay visible without clearing form input. If a connection drops or a request times out, refresh before retrying: the operation may already have completed and mutations are never automatically replayed. **Done** or `Escape` closes the manager.
 
 ## Keyboard shortcuts
 
@@ -142,12 +161,13 @@ At viewport widths below 768px, the cockpit follows the narrow-layout pattern es
 
 - The dock becomes a full-screen floating drawer sized to the **visual viewport** and stops pushing the DSH conversation layout. While it is open the page behind it is scroll-locked, and the un-cancellable browser-level panning that iOS performs with the keyboard open is tracked exactly, so the conversation underneath can never scroll or peek through.
 - Every tmux pane stays visible in its real tmux grid position; there is no separate client-side pane-tab or single-pane mode.
-- Fonts stop shrinking at a readable 12px floor instead of scaling the whole remote grid down to eyestrain sizes. A grid larger than its pane box becomes pannable: one-finger drags move it in both axes with momentum, and the view stays pinned to the prompt rows until you pan away.
+- Text stays at the mobile toolbar's chosen size (12px by default), including while the keyboard opens and closes. A grid larger than its pane box becomes pannable: one-finger drags move it in either axis with momentum. Reading offsets are preserved; the prompt stays bottom-pinned until you pan or scroll away.
+- Drag a pane title onto another pane to swap their native tmux positions. Terminal-content drags only scroll; they never move a pane or change keyboard focus.
 - Vertical drags scroll every kind of pane content. Beyond the clipped grid rows, the gesture becomes synthetic wheel events that xterm interprets per pane state: programs with mouse reporting (agent CLIs, TUIs) receive real wheel reports and scroll their own transcripts, alternate-screen programs get arrow keys, and normal buffers scroll xterm scrollback.
 - Tap a pane to select it, then use the toolbar zoom button or `Ctrl+B z`. This sends tmux's native `resize-pane -Z`; tapping it again restores the grid. Double-tapping (or double-clicking) a pane title performs the same native toggle.
 - Tapping a pane never opens the on-screen keyboard. The toolbar keyboard button summons and dismisses it explicitly, so scrolling and reading stay undisturbed. While the keyboard is up, the session picker and window-tab rows collapse to give the terminal the space back, and focus follows pane taps so typing goes where you touched.
 - A narrow viewport is a pure mirror: it retracts any grid previously reported by that browser and never resizes the shared tmux window, so the keyboard opening or the URL bar collapsing cannot reflow other viewers or trigger refresh loops.
-- Dock and pane resize handles are disabled, the desktop side selector is hidden, and primary controls use 44px touch targets.
+- Drag the visible grips on pane boundaries to resize horizontally or vertically. Divider hit areas are 24px wide on phones and touch-capable devices; dragging terminal content still only scrolls. Only the outer full-screen dock resize handle and desktop side selector are hidden; primary controls use 44px touch targets.
 - Safe-area padding supports notched devices, while `visualViewport` resize/scroll tracking keeps the terminal above the on-screen keyboard.
 - At 768px and wider, the complete desktop layout and resize controls return automatically.
 
@@ -172,7 +192,20 @@ Browser-local settings are versioned in local storage and never broadcast to oth
 
 Scrollback defaults to 2,000 lines and is bounded to 20,000 lines and 800 KB per pane. The value controls both xterm retention and tmux history requested after reconnect or a window switch. History replies return only to the browser that requested them; capture work is serialized and repeated pending requests from one browser coalesce to the newest request.
 
-Pane-close confirmation is enabled by default. Repeat the same close button, toolbar action, or `Ctrl+B x` within three seconds to confirm. The host still refuses to kill the final pane in a session.
+Pane-close confirmation is enabled by default. A single activation opens an explicit confirmation dialog; cancel leaves the pane untouched. Disable confirmation for one-click pane closing. The dock's **Hide** button always works on the first click and never kills a process. The host still refuses to kill the final pane in a session.
+
+### Interaction regression checks
+
+```bash
+pnpm run check
+pnpm exec playwright install --with-deps chromium webkit
+pnpm test:browser
+node --experimental-strip-types --test tests/native/*.test.ts
+# Optional: verify the existing GUI's installed assets, with mocked tmux transport:
+DSH_GUI_URL=http://127.0.0.1:3080 pnpm test:browser
+```
+
+Browser tests use real xterm in Chromium and WebKit with synthetic terminals; Chromium also receives trusted CDP touch input. Native tests create and clean up a separate tmux server. `CHROMIUM_PATH` can select an existing Chromium binary. No test sends input to an operator's panes. See [UX verification](./UX-VERIFICATION.md) for coverage and the physical-device keyboard checklist.
 
 ## Fonts
 

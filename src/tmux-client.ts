@@ -1,11 +1,11 @@
-import { spawn, execFile } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { EventEmitter } from 'node:events'
-import { promisify } from 'node:util'
 import { decodeControlOutput } from './decode.ts'
 import { parseLayout, type PaneRect } from './layout.ts'
 import type { SessionInfo, WindowInfo } from './types.ts'
 
-const execFileAsync = promisify(execFile)
+import { listSessionsCli } from './tmux-cli.ts'
+export { listSessionsCli } from './tmux-cli.ts'
 
 export interface TmuxPane {
   id: string
@@ -96,6 +96,7 @@ export class TmuxControlClient extends EventEmitter<Events> {
   private block: OpenBlock | null = null
   private queue: Pending[] = []
   private snapshot: TmuxSnapshot | null = null
+  private snapshotTask: Promise<void> = Promise.resolve()
   private sessionName = ''
   private clientName = ''
   private stderrTail = ''
@@ -123,6 +124,11 @@ export class TmuxControlClient extends EventEmitter<Events> {
   /** Name of the session this control client is attached to ('' when detached). */
   get session(): string {
     return this.transport === null ? '' : this.sessionName
+  }
+
+  /** Server-reported full client name, used only for inventory ownership. */
+  get controlClientName(): string {
+    return this.transport === null ? '' : this.clientName
   }
 
   currentSnapshot(): TmuxSnapshot | null {
@@ -185,6 +191,7 @@ export class TmuxControlClient extends EventEmitter<Events> {
     this.stderrTail = ''
     this.failAll(new Error('detached'))
     this.snapshot = null
+    this.clientName = ''
   }
 
   /**
@@ -332,11 +339,21 @@ export class TmuxControlClient extends EventEmitter<Events> {
     this.scheduleRefresh()
   }
 
-  async refreshSnapshot(): Promise<TmuxSnapshot> {
+  refreshSnapshot(): Promise<TmuxSnapshot> {
+    const transport = this.transport
+    const task = this.snapshotTask.then(async () => {
+      if (transport === null || this.transport !== transport) throw new Error('detached')
+      return this.readSnapshot(transport)
+    })
+    this.snapshotTask = task.then(() => {}, () => {})
+    return task
+  }
+
+  private async readSnapshot(transport: ControlTransport): Promise<TmuxSnapshot> {
     const win = await this.command(
       "display-message -p -F '#{window_id}\t#{window_name}\t#{window_width}\t#{window_height}\t#{window_visible_layout}\t#{window_zoomed_flag}\t#{session_name}'",
     )
-    const [windowId, windowName, w, h, visibleLayout, zoomedFlag, sessionName] = win.trim().split('\t')
+    const [windowId, windowName, w, h, visibleLayout, zoomedFlag, sessionName] = win.split('\t')
     if (sessionName) this.sessionName = sessionName
     const list = await this.command(
       "list-panes -F '#{pane_id}\t#{pane_index}\t#{pane_title}\t#{pane_left}\t#{pane_top}\t#{pane_width}\t#{pane_height}\t#{pane_active}\t#{@dsh_role}'",
@@ -372,6 +389,7 @@ export class TmuxControlClient extends EventEmitter<Events> {
       windows,
       viewers,
     }
+    if (this.transport !== transport) throw new Error('detached')
     this.snapshot = snap
     this.emit('snapshot', snap)
     return snap
@@ -535,22 +553,6 @@ function parseBlockEdge(line: string): { kind: 'begin' | 'end' | 'error'; num: s
     kind: match[1] as 'begin' | 'end' | 'error',
     num: match[3],
     ours: (Number(match[4]) & 1) === 1,
-  }
-}
-
-export async function listSessionsCli(tmuxBin: string): Promise<SessionInfo[]> {
-  try {
-    const { stdout } = await execFileAsync(tmuxBin, [
-      'list-sessions',
-      '-F',
-      '#{session_name}\t#{session_attached}\t#{session_windows}',
-    ], { timeout: 2000 })
-    return stdout.trim() === '' ? [] : stdout.trim().split('\n').map((line) => {
-      const [name, attached, windows] = line.split('\t')
-      return { name: name ?? '', attached: Number(attached) || 0, windows: Number(windows) || 0 }
-    })
-  } catch {
-    return []
   }
 }
 

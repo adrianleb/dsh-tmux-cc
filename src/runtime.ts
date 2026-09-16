@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { TmuxControlClient, listSessionsCli, type TmuxSnapshot } from './tmux-client.ts'
+import { TmuxManagement, isManagementType, managementRequestId, validateManagementRequest } from './tmux-management.ts'
 import {
   DEFAULT_SETTINGS,
   type ClientToHost,
@@ -59,9 +60,14 @@ export class TmuxRuntime {
   /** At most one pending capture per socket and one active capture drain globally. */
   private captureRequests = new Map<SocketLike, { lines?: number; pane?: string }>()
   private captureTask: Promise<void> | null = null
+  private readonly management: TmuxManagement
+  /** Inventory, management writes, and wire attachment changes share one queue. */
+  private managementTask: Promise<void> = Promise.resolve()
+  private disposed = false
 
   constructor(config: RuntimeConfig) {
     this.tmuxBin = config.tmuxBin
+    this.management = new TmuxManagement(this.tmuxBin, () => this.client?.controlClientName ?? '')
     this.layouts = config.layouts ?? []
     const fallback = config.sizePolicy === 'mirror' ? 'mirror' : DEFAULT_SETTINGS.sizePolicy
     this.getSizePolicy = config.getSizePolicy ?? (() => fallback)
@@ -99,6 +105,7 @@ export class TmuxRuntime {
       return
     }
     void this.snapshot().then((snapshot) => this.broadcast({ type: 'snapshot', snapshot }))
+      .catch((error: unknown) => this.broadcastError(error))
   }
 
   async snapshot(): Promise<Snapshot> {
@@ -125,7 +132,11 @@ export class TmuxRuntime {
     }
   }
 
-  async attach(session: string): Promise<Snapshot> {
+  attach(session: string): Promise<Snapshot> {
+    return this.queueManagement(() => this.attachSession(session))
+  }
+
+  private async attachSession(session: string): Promise<Snapshot> {
     const resolved = this.resolveSession(session)
     if (!this.client) this.client = this.makeClient()
     if (this.client.attached && this.client.session !== resolved) {
@@ -156,9 +167,11 @@ export class TmuxRuntime {
     this.captureRequests.clear()
     this.client?.detach()
     void this.snapshot().then((snap) => this.broadcast({ type: 'snapshot', snapshot: snap }))
+      .catch((error: unknown) => this.broadcastError(error))
   }
 
   dispose(): void {
+    this.disposed = true
     this.resetSizeState(true)
     this.attachmentGeneration += 1
     this.captureRequests.clear()
@@ -312,13 +325,12 @@ export class TmuxRuntime {
     this.sockets.add(socket)
     void this.snapshot().then((snap) => {
       socket.send(JSON.stringify({ type: 'snapshot', snapshot: snap } satisfies HostToClient))
-    })
+    }).catch((err: unknown) => this.sendError(socket, err))
     socket.on('message', (raw) => {
       void this.handle(socket, raw).catch((err: unknown) => {
-        socket.send(JSON.stringify({
-          type: 'error',
-          message: err instanceof Error ? err.message : String(err),
-        } satisfies HostToClient))
+        let requestId: string | undefined
+        try { requestId = managementRequestId(JSON.parse(raw)) } catch { /* malformed JSON has no usable ID */ }
+        this.sendError(socket, err, requestId)
       })
     })
     socket.on('close', () => {
@@ -356,6 +368,11 @@ export class TmuxRuntime {
     }
   }
 
+  /** Keep native commands shell-free and bounded, including browser pane swaps. */
+  private async runTmux(args: string[]): Promise<void> {
+    await execFileAsync(this.tmuxBin, args, { timeout: 5000 })
+  }
+
   private layoutInfos(): LayoutInfo[] {
     return this.layouts.map(({ id, label, session }) => ({ id, label, session }))
   }
@@ -363,6 +380,7 @@ export class TmuxRuntime {
   private makeClient(): TmuxControlClient {
     const client = new TmuxControlClient(this.tmuxBin)
     client.on('snapshot', (snap) => {
+      this.setPrefs({ session: snap.session })
       // Settle serialized size policy first so the broadcast reports the final
       // mode and concurrent click/resize snapshots cannot race flag changes.
       void this.queueSizePolicy()
@@ -386,7 +404,7 @@ export class TmuxRuntime {
       void this.snapshot().then((snap) => this.broadcast({
         type: 'snapshot',
         snapshot: { ...snap, attached: false, error: 'tmux control client exited' },
-      }))
+      })).catch((error: unknown) => this.broadcastError(error))
     })
     return client
   }
@@ -469,6 +487,48 @@ export class TmuxRuntime {
     } catch {
       throw new Error('invalid message')
     }
+    if (typeof msg !== 'object' || msg === null || Array.isArray(msg) || typeof msg.type !== 'string') {
+      throw new Error('invalid message')
+    }
+    if (isManagementType(msg.type)) {
+      const request = validateManagementRequest(msg)
+      if (request.type === 'create-session' || request.type === 'rename-session') {
+        const name = request.type === 'create-session' ? request.name : request.newName
+        if (this.layouts.some(layout => layout.id === name && layout.session !== name)) {
+          throw new Error(`session name "${name}" is reserved by a layout recipe; choose another name`)
+        }
+      }
+      await this.queueManagement(async () => {
+        let failure: unknown
+        try {
+          if (request.type === 'create-session') await this.management.create(request.name, request.cwd)
+          else if (request.type === 'rename-session') {
+            await this.management.rename(request.session, request.newName)
+            if (this.prefs.session === request.session) this.setPrefs({ session: request.newName })
+          } else if (request.type === 'detach-clients') await this.management.detach(request.clients)
+        } catch (error) {
+          failure = error
+        }
+        if (request.type !== 'management') {
+          // Refresh even after failure: a client may disappear mid-batch, or a
+          // command may have succeeded before an IPC/refresh failure surfaced.
+          try {
+            const client = this.client
+            if (client?.attached) {
+              await client.refreshSnapshot()
+              await this.queueSizePolicy()
+            }
+            this.broadcast({ type: 'snapshot', snapshot: await this.snapshot() })
+          } catch (error) {
+            failure ??= error
+          }
+        }
+        if (failure !== undefined) throw failure
+        const inventory = await this.management.inventory()
+        socket.send(JSON.stringify({ type: 'management', requestId: request.requestId, ...inventory } satisfies HostToClient))
+      })
+      return
+    }
     if (msg.type === 'hello' || msg.type === 'refresh') {
       socket.send(JSON.stringify({ type: 'snapshot', snapshot: await this.snapshot() } satisfies HostToClient))
       return
@@ -483,7 +543,7 @@ export class TmuxRuntime {
       return
     }
     if (msg.type === 'detach') {
-      this.detach()
+      await this.queueManagement(async () => { this.detach() })
       return
     }
     if (msg.type === 'resize') {
@@ -506,6 +566,25 @@ export class TmuxRuntime {
     if (client === null || !client.attached) throw new Error('not attached')
     if (msg.type === 'input') { await client.sendKeys(msg.pane, msg.data); return }
     if (msg.type === 'select') { await client.selectPane(msg.pane); return }
+    if (msg.type === 'swap') {
+      if (
+        typeof msg.pane !== 'string' || !/^%\d+$/.test(msg.pane)
+        || typeof msg.target !== 'string' || !/^%\d+$/.test(msg.target)
+      ) throw new Error('invalid swap request')
+      if (msg.pane === msg.target) throw new Error('cannot swap a pane with itself')
+      const panes = client.currentSnapshot()?.panes ?? []
+      if (!panes.some((pane) => pane.id === msg.pane) || !panes.some((pane) => pane.id === msg.target)) {
+        throw new Error('swap panes must be visible in the attached tmux window')
+      }
+      // Native swaps are symmetric, but tmux 3.7b changes focus even with -d
+      // when the target is active. Keep an involved active pane on the source
+      // side; an uninvolved active pane stays untouched without a select-pane.
+      const targetActive = panes.some((pane) => pane.id === msg.target && pane.active)
+      const [source, target] = targetActive ? [msg.target, msg.pane] : [msg.pane, msg.target]
+      await this.runTmux(['swap-pane', '-d', '-s', source, '-t', target])
+      await client.refreshSnapshot()
+      return
+    }
     if (msg.type === 'select-window') { await client.selectWindow(msg.windowId); return }
     if (msg.type === 'zoom') { await client.zoom(msg.pane); return }
     if (msg.type === 'split') {
@@ -527,6 +606,28 @@ export class TmuxRuntime {
       return
     }
     if (msg.type === 'select-dir') { await client.selectDir(msg.dir) }
+  }
+
+  private queueManagement<T>(operation: () => Promise<T>): Promise<T> {
+    const task = this.managementTask.then(() => {
+      if (this.disposed) throw new Error('tmux runtime disposed')
+      return operation()
+    })
+    this.managementTask = task.then(() => {}, () => {})
+    return task
+  }
+
+  private sendError(socket: SocketLike, error: unknown, requestId?: string): void {
+    try {
+      socket.send(JSON.stringify({
+        type: 'error', message: error instanceof Error ? error.message : String(error),
+        ...(requestId === undefined ? {} : { requestId }),
+      } satisfies HostToClient))
+    } catch { /* socket already closed */ }
+  }
+
+  private broadcastError(error: unknown): void {
+    this.broadcast({ type: 'error', message: error instanceof Error ? error.message : String(error) })
   }
 
   private broadcast(msg: HostToClient, skip?: SocketLike): void {

@@ -71,14 +71,15 @@ test('client bundle invariants', () => {
   assert.match(reportSrc, /if \(isNarrowViewport\(\) \|\| document\.body\.dataset\.dshTmuxDragging\)/)
   assert.match(reportSrc, /store\.clearResize\(\)/)
   // Kill confirmation is preference-driven and applies to pointer and prefix-x actions.
-  assert.match(src, /shouldArmKill\(prefs\.confirmKill, armedKill, id\)/)
+  assert.match(src, /confirmPaneClose\(prefs\.confirmKill\)/)
   assert.match(src, /store\.requestKill\('active'\)/)
   assert.doesNotMatch(src, /lastPointerType/)
   // Touch: taps never summon the on-screen keyboard implicitly; the toolbar
   // keyboard toggle does, and terminals opt out of native panning. Once the
   // keyboard is up, focus follows the tap so typing goes to the touched pane.
   assert.match(src, /data-tmux-cc-kbd/)
-  assert.match(src, /if \(ev\.pointerType === 'touch' && !dockTerminalFocused\(\)\) return/)
+  assert.match(src, /if \(ev\.pointerType === 'touch' \|\| ev\.button !== 0/)
+  assert.match(src, /if \(dockTerminalFocused\(\)\) focusPane\(rec\)/)
   assert.match(src, /touchAction: 'none'/)
   // Touch scrolling is natural-direction with momentum on both axes (rows
   // then synthetic wheels vertically, the overflowing grid horizontally),
@@ -99,7 +100,7 @@ test('client bundle invariants', () => {
   assert.match(src, /\{ capture: true, passive: false \}/)
   assert.match(src, /new WheelEvent\('wheel'/)
   assert.match(src, /DOM_DELTA_LINE/)
-  assert.doesNotMatch(src, /mouseTrackingMode/)
+  assert.match(src, /rec\.term\.scrollLines\(lines\)/)
   // Gestures land on a stable layer above xterm's rows: touch events are
   // target-locked at touchstart, and the DOM renderer replacing the touched
   // row span mid-gesture silently ended every drag on a streaming pane.
@@ -137,7 +138,7 @@ test('client bundle invariants', () => {
   assert.match(src, /translate\(\$\{tx\}px, \$\{ty\}px\)/)
   assert.match(src, /data-dsh-tmux-mobile-lock/)
   assert.match(src, /window\.scrollTo\(0, 0\)/)
-  assert.match(src, /touch-action:none;overscroll-behavior:none/)
+  assert.match(src, /touch-action:pan-x;overscroll-behavior:none/)
   // Readable mobile floor: fitting stops shrinking at MOBILE_MIN_FONT and the
   // grid overflow becomes pannable instead (pinned to the prompt rows).
   assert.match(src, /MOBILE_MIN_FONT = 12/)

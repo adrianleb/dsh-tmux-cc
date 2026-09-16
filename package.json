@@ -1,6 +1,6 @@
 {
   "name": "dsh-tmux-cc",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "A persistent tmux control-mode cockpit for DeepSeek Harness Web.",
   "license": "MIT",
   "author": {
@@ -42,6 +42,7 @@
     "README.md",
     "README.zh-CN.md",
     "CHANGELOG.md",
+    "UX-VERIFICATION.md",
     "LICENSE"
   ],
   "engines": {
@@ -67,7 +68,9 @@
     "check": "pnpm test && pnpm run typecheck && pnpm run build",
     "prepare": "pnpm run build",
     "test": "node --experimental-strip-types --test src/*.test.ts",
-    "typecheck": "tsc -p tsconfig.test.json"
+    "typecheck": "tsc -p tsconfig.test.json",
+    "test:browser": "playwright test",
+    "test:native": "node --experimental-strip-types --test tests/native/*.test.ts"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1"
@@ -80,6 +83,7 @@
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
+    "@playwright/test": "^1.63.0",
     "@types/node": "^22.10.0",
     "@types/ws": "^8.5.10",
     "typescript": "^5.6.0"

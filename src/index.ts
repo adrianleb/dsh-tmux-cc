@@ -6,7 +6,7 @@ import type { IncomingMessage } from 'node:http'
 import type { Duplex } from 'node:stream'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import { installSettingsSection, settingsNamespace } from '@deepseek-ai/dsh-settings'
+
 import { TmuxRuntime } from './runtime.ts'
 import { isTrustedApiRequest, isTrustedWebSocketRequest } from './trust.ts'
 import {
@@ -17,6 +17,41 @@ import {
   type SizePolicy,
   type TmuxSettings,
 } from './types.ts'
+
+// dsh 0.1.2 removed the named helpers settingsNamespace and
+// installSettingsSection. The settings service is unchanged:
+// ctx.settings.register(ns, schema, { base }). Importing the deleted
+// names is a SyntaxError at module evaluation and takes the whole host down.
+const NAMESPACE_PATTERN = /^[a-z][a-z0-9-]*$/
+function settingsNamespace(value: string): string {
+  if (!NAMESPACE_PATTERN.test(value)) {
+    throw new TypeError('settings namespace "' + value + '" must match ' + String(NAMESPACE_PATTERN))
+  }
+  return value
+}
+
+function installSettingsSection(
+  ctx: { inject?: (deps: string[], fn: (sctx: any) => void) => void },
+  ns: string,
+  schema: unknown,
+  entry: TmuxSettings,
+  hooks: { setSource: (current: () => TmuxSettings) => void; onChange: () => void; validate?: (value: TmuxSettings) => void },
+) {
+  ctx.inject?.(['settings'], (sctx) => {
+    const scope = sctx.settings.register(ns, schema, {
+      base: entry,
+      ...(hooks.validate === undefined ? {} : { validate: hooks.validate }),
+    })
+    hooks.setSource(() => scope.get() as TmuxSettings)
+    sctx.effect(() => () => {
+      hooks.setSource(() => entry)
+      hooks.onChange()
+    })
+    hooks.onChange()
+    scope.watch(() => hooks.onChange())
+  })
+}
+
 
 export const name = 'tmux-cc'
 export const inject = ['webServer']

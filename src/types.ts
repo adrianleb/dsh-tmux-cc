@@ -103,6 +103,31 @@ export interface SessionInfo {
   windows: number
 }
 
+/** Identity returned by tmux; all three fields are required for a selected detach. */
+export interface AttachedClientIdentity {
+  name: string
+  pid: number
+  created: number
+}
+
+export interface AttachedClientInfo extends AttachedClientIdentity {
+  session: string
+  tty: string
+  term: string
+  cols: number
+  rows: number
+  flags: string[]
+  control: boolean
+  /** This runtime's shared control client; detach it with the existing dock action. */
+  own: boolean
+}
+
+export type ManagementRequest =
+  | { type: 'management'; requestId: string }
+  | { type: 'create-session'; requestId: string; name: string; cwd?: string }
+  | { type: 'rename-session'; requestId: string; session: string; newName: string }
+  | { type: 'detach-clients'; requestId: string; clients: AttachedClientIdentity[] }
+
 export interface WindowInfo {
   id: string
   index: number
@@ -135,11 +160,13 @@ export interface Snapshot {
 }
 
 export type ClientToHost =
+  | ManagementRequest
   | { type: 'hello' }
   | { type: 'input'; pane: string; data: string }
   | { type: 'resize'; cols: number; rows: number }
   | { type: 'resize'; active: false }
   | { type: 'select'; pane: string }
+  | { type: 'swap'; pane: string; target: string }
   | { type: 'zoom'; pane?: string }
   | { type: 'split'; pane: string; dir: 'h' | 'v' }
   | { type: 'kill'; pane?: string }
@@ -157,4 +184,5 @@ export type HostToClient =
   | { type: 'snapshot'; snapshot: Snapshot }
   | { type: 'output'; pane: string; data: string }
   | { type: 'history'; pane: string; data: string }
-  | { type: 'error'; message: string }
+  | { type: 'management'; requestId: string; sessions: SessionInfo[]; clients: AttachedClientInfo[] }
+  | { type: 'error'; message: string; requestId?: string }

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { TmuxRuntime, type SocketLike } from './runtime.ts'
 import type { TmuxSnapshot } from './tmux-client.ts'
+import type { ClientToHost } from './types.ts'
 
 class FakeSocket implements SocketLike {
   sent: string[] = []
@@ -35,7 +36,11 @@ class FakeTmuxClient {
     viewers: 0,
   }
   get session(): string { return this.attached ? this.snap.session : '' }
-  currentSnapshot(): TmuxSnapshot { return this.snap }
+  currentSnapshot(): TmuxSnapshot | null { return this.snap }
+  async refreshSnapshot(): Promise<TmuxSnapshot> {
+    this.calls.push('refresh')
+    return this.snap
+  }
   async attach(session: string): Promise<void> {
     this.calls.push(`attach:${session}`)
     this.attached = true
@@ -369,6 +374,126 @@ test('shortcut protocol dispatches new-window and directional pane resize', asyn
     /invalid directional pane resize request/,
   )
   assert.deepEqual(fakeClient.calls, ['new-window', 'split:h:%5', 'resize-dir:%5:U:1'])
+})
+
+function swapFixture() {
+  const runtime = new TmuxRuntime({ tmuxBin: 'tmux' })
+  const fakeClient = new FakeTmuxClient()
+  fakeClient.snap.panes = [
+    { id: '%1', index: 1, title: '', role: '', left: 0, top: 0, width: 59, height: 40, active: true },
+    { id: '%2', index: 2, title: '', role: '', left: 60, top: 0, width: 60, height: 40, active: false },
+  ]
+  const internals = runtime as unknown as {
+    client: FakeTmuxClient
+    handle(socket: SocketLike, raw: string): Promise<void>
+    runTmux(args: string[]): Promise<void>
+  }
+  internals.client = fakeClient
+  const commands: string[][] = []
+  internals.runTmux = async (args) => {
+    commands.push(args)
+    fakeClient.calls.push('swap')
+  }
+  const socket = new FakeSocket()
+  return {
+    fakeClient,
+    internals,
+    commands,
+    handle: (message: unknown) => internals.handle(socket, JSON.stringify(message)),
+  }
+}
+
+test('swap uses explicit native pane IDs without selecting, then refreshes after completion', async () => {
+  const { fakeClient, internals, commands, handle } = swapFixture()
+  let release!: () => void
+  const gate = new Promise<void>(resolve => { release = resolve })
+  const runTmux = internals.runTmux
+  internals.runTmux = async (args) => {
+    await runTmux(args)
+    await gate
+  }
+  const message = { type: 'swap', pane: '%1', target: '%2' } satisfies ClientToHost
+  const pending = handle(message)
+  assert.deepEqual(commands, [['swap-pane', '-d', '-s', '%1', '-t', '%2']])
+  assert.deepEqual(fakeClient.calls, ['swap'])
+  release()
+  await pending
+  assert.deepEqual(fakeClient.calls, ['swap', 'refresh'])
+})
+
+test('swap normalizes an active target to the native source without selecting a pane', async () => {
+  const { fakeClient, commands, handle } = swapFixture()
+  await handle({ type: 'swap', pane: '%2', target: '%1' })
+  assert.deepEqual(commands, [['swap-pane', '-d', '-s', '%1', '-t', '%2']])
+  assert.deepEqual(fakeClient.calls, ['swap', 'refresh'])
+})
+
+test('swap leaves an uninvolved active pane alone and keeps the requested argument order', async () => {
+  const { fakeClient, commands, handle } = swapFixture()
+  fakeClient.snap.panes[0].active = false
+  fakeClient.snap.panes.push({ id: '%3', index: 3, title: '', role: '', left: 0, top: 20, width: 120, height: 20, active: true })
+  await handle({ type: 'swap', pane: '%2', target: '%1' })
+  assert.deepEqual(commands, [['swap-pane', '-d', '-s', '%2', '-t', '%1']])
+  assert.deepEqual(fakeClient.calls, ['swap', 'refresh'])
+})
+
+test('swap rejects missing, malformed, and selector-like pane IDs before invoking tmux', async () => {
+  const { fakeClient, commands, handle } = swapFixture()
+  const invalidValues = [undefined, null, 1, {}, ['%1'], '', '1', '@1', 'other:0.1', '%1; kill-server', '%1\n']
+  for (const invalid of invalidValues) {
+    await assert.rejects(handle({ type: 'swap', pane: invalid, target: '%2' }), /invalid swap request/)
+    await assert.rejects(handle({ type: 'swap', pane: '%1', target: invalid }), /invalid swap request/)
+  }
+  assert.deepEqual(commands, [])
+  assert.deepEqual(fakeClient.calls, [])
+})
+
+test('swap rejects self swaps and panes absent from the current window', async () => {
+  const { fakeClient, commands, handle } = swapFixture()
+  await assert.rejects(handle({ type: 'swap', pane: '%1', target: '%1' }), /cannot swap a pane with itself/)
+  for (const [pane, target] of [['%99', '%2'], ['%1', '%99'], ['%98', '%99']]) {
+    await assert.rejects(handle({ type: 'swap', pane, target }), /visible in the attached tmux window/)
+  }
+  // A missing snapshot or panes hidden by zoom cannot authorize a swap either.
+  fakeClient.snap.panes = fakeClient.snap.panes.filter(pane => pane.active)
+  fakeClient.snap.zoomed = true
+  await assert.rejects(handle({ type: 'swap', pane: '%1', target: '%2' }), /visible in the attached tmux window/)
+  fakeClient.currentSnapshot = () => null
+  await assert.rejects(handle({ type: 'swap', pane: '%1', target: '%2' }), /visible in the attached tmux window/)
+  assert.deepEqual(commands, [])
+  assert.deepEqual(fakeClient.calls, [])
+})
+
+test('swap requires an attached client and propagates native failures without refreshing', async () => {
+  const { fakeClient, internals, commands, handle } = swapFixture()
+  fakeClient.attached = false
+  await assert.rejects(handle({ type: 'swap', pane: '%1', target: '%2' }), /not attached/)
+  assert.deepEqual(commands, [])
+
+  fakeClient.attached = true
+  internals.runTmux = async () => { throw new Error('swap-pane failed') }
+  await assert.rejects(handle({ type: 'swap', pane: '%1', target: '%2' }), /swap-pane failed/)
+  assert.deepEqual(fakeClient.calls, [])
+})
+
+test('swap waits for and propagates snapshot refresh failures', async () => {
+  const { fakeClient, commands, handle } = swapFixture()
+  fakeClient.refreshSnapshot = async () => { throw new Error('snapshot refresh failed') }
+  await assert.rejects(handle({ type: 'swap', pane: '%2', target: '%1' }), /snapshot refresh failed/)
+  assert.deepEqual(commands, [['swap-pane', '-d', '-s', '%1', '-t', '%2']])
+})
+
+test('swap protocol types require both source and target strings', () => {
+  const accept = (message: ClientToHost): string => message.type
+  assert.equal(accept({ type: 'swap', pane: '%1', target: '%2' }), 'swap')
+  // @ts-expect-error a swap cannot use an implicit target pane
+  accept({ type: 'swap', pane: '%1' })
+  // @ts-expect-error a swap cannot use an implicit source pane
+  accept({ type: 'swap', target: '%2' })
+  // @ts-expect-error target pane IDs must be strings
+  accept({ type: 'swap', pane: '%1', target: 2 })
+  // @ts-expect-error source pane IDs must be strings
+  accept({ type: 'swap', pane: 1, target: '%2' })
 })
 
 test('history capture replies only to the requesting browser', async () => {

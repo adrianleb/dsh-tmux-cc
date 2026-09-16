@@ -6,6 +6,8 @@ node_modules/
 dist/
 *.tgz
 coverage/
+playwright-report/
+test-results/
 
 # Local configuration and logs
 .env

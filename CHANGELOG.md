@@ -6,34 +6,36 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-15
+
 ### Added
 
-- A browser-safe subset of iTerm2's native tmux shortcuts is available on macOS while an xterm pane has focus: dedicated detach/new-window actions, `⌥⌘X` focused-pane close, pane zoom, one-cell directional resize, and split chords.
-- The `Ctrl+B` map now includes new window (`c`), next/previous window (`n`/`p`), indexed window selection (`0`–`9`), and detach (`d`), with literal-prefix forwarding on `Ctrl+B Ctrl+B`.
-- A browser-local opt-in enables compact split chords: `⌥⌘D` for side-by-side and `⌥⇧⌘D` for top/bottom, with an explicit macOS Dock-shortcut warning.
-- Mobile fonts stop shrinking at a readable 12px floor. A tmux grid larger than its pane box becomes pannable instead: one-finger drags move it in both axes with momentum, vertical drags continue into xterm scrollback, and the view stays pinned to the prompt rows until the reader pans away.
-- Double-tapping a pane title on a touch screen now triggers native tmux zoom, matching the documented double-click behavior (iOS does not reliably synthesize `dblclick`).
-- The mobile toolbar gained a live font stepper (A− / A+) controlling the readable floor between 6 and 24px. A wide mirrored grid cannot fit a phone at readable sizes, so the reader chooses the fit-versus-legibility tradeoff directly — three taps down takes an 85-column mirror from wider-than-the-screen to fully fitted.
-- While the on-screen keyboard is up, the mobile session picker and window-tab rows collapse to return that space to the terminal, and focus follows pane taps so typing goes to the pane that was touched.
+- A bilingual **Sessions & clients** manager: create sessions with an optional host directory and optional attachment, rename sessions inline, and attach existing sessions, including from an empty server.
+- Native tmux client inventory with session filtering and confirmed bulk detach. The shared dock client is protected, and fresh identity checks reject stale targets without killing sessions or processes.
+- Drag pane titles to swap native tmux positions on desktop and mobile, with highlighted drop targets, preserved focus, and safe cancellation.
+- Touch-friendly pane dividers with visible grips and 24px hit areas for horizontal and vertical resizing, including below 768px.
+- A mobile font stepper (6–24px, default 12px), two-axis terminal panning with momentum, and native pane zoom through a title double-tap.
+- Expanded `Ctrl+B` commands for new/next/previous/indexed windows and detach; browser-safe iTerm2-style macOS shortcuts and optional compact split chords.
+- Chromium/WebKit browser tests, trusted Chromium touch-input tests, isolated native tmux integration tests, and CI coverage for the new interactions and management operations.
 
 ### Changed
 
-- Keyboard interception is restricted to an actually focused xterm, requires exact modifiers, expires pending prefixes after 1.5 seconds, and restores literal `Ctrl+B` for unsupported follow-ups.
-- Collision-prone direct `Alt+Arrow` handling was removed. Browser-reserved iTerm2 chords such as `⌘D`, all `⌘W` variants, `⌘[/]`, and `⌥⌘Arrow` are deliberately left to the browser.
-- The mobile drawer is now sized to the visual viewport and repositioned with a transform, separating placement from sizing: tracking keyboard/URL-bar panning can no longer resize the shell or re-fit fonts mid-scroll.
+- Pane closing now uses an explicit confirmation dialog instead of a hidden second activation. Disable confirmation for one-click pane closing; **Hide** always dismisses the dock without killing a process.
+- Mobile text stays at the selected size through keyboard and viewport changes. Reading offsets are preserved, and the live prompt stays bottom-pinned until the reader scrolls away.
+- Only completed touch taps change the typing target; dragging terminal content never steals keyboard focus. The session and tab rows collapse while terminal input is focused.
+- Shortcut handling requires an actual terminal focus and exact modifiers. Browser-reserved shortcuts are left alone, and unsupported prefix sequences are forwarded literally.
 
 ### Fixed
 
-- The page behind the open mobile drawer can no longer scroll: the document is scroll-locked, the drawer fences all touches with `touch-action: none` (re-enabling `pan-x` only for its own toolbar rows), and browser-level visual-viewport panning — the un-cancellable kind iOS performs while the keyboard is open — is tracked exactly instead of exposing the conversation underneath.
-- iOS "reveal the caret" auto-scrolling of `overflow: hidden` ancestors after focusing a terminal is detected and undone, so opening the keyboard no longer shoves pane content out of its box or desyncs the fixed plugin root.
-- Touch drags that started horizontally used to do nothing; they now pan the grid. Vertical drags scroll the pane content itself rather than the page.
-- Touch scrolling actually scrolls every kind of pane now. Drags used to die after a few pixels for three compounding reasons: xterm's built-in touch handlers competed with the plugin's and both went dead the moment the pane program enabled mouse reporting (exactly the agent-CLI/TUI panes whose transcripts scroll *inside* the program); the plugin aborted on such panes instead of talking to them; and `preventDefault` only fired after an 8px slop, letting iOS commit a visual-viewport pan with the keyboard open after which every event turns non-cancelable. The plugin is now the single gesture owner (capture-phase listeners fence xterm's touch handlers), claims the gesture on the first `touchmove`, and translates drags into row-quantized synthetic wheel events that xterm interprets per pane state — encoded wheel reports for mouse-reporting programs, arrow keys in alternate buffers, viewport scrollback otherwise — with behavioral tests driving real touch sequences through the handler.
-- While the mobile drawer is open, the viewport meta requests `interactive-widget=resizes-content` so browsers that support it (Chromium) resize the layout viewport for the keyboard, removing the pan-steal range entirely.
-- The keyboard toggle now acts directly on `touchend` (swallowing the synthetic click that would double-toggle): iOS shows the software keyboard for a programmatic focus most reliably inside a touch handler, and the plain click path remains for mouse and keyboard users.
-- iOS refused to show the software keyboard at all once the mobile scroll lock landed: xterm parks its focus textarea at `left:-9999em`, iOS insists on scrolling a newly-focused element into view, and with the document locked (and stray scrolls snapped back) that reveal was impossible — so Safari cancelled the keyboard. The invisible textarea is now pinned inside the viewport on mobile, and the stray-scroll guard grants a grace window after a terminal gains focus. A summon that still fails now prints a transient diagnostic line in the drawer stating whether focus was lost or the keyboard simply did not appear.
-- Mobile now auto-fits the full grid width whenever that stays readable (≥9px) and the font floor is untouched: a typical phone-sized mirror is fully visible with no horizontal panning, while wider grids keep the readable floor and pan. Any explicit A−/A+ choice pins the floor exactly.
-- The `interactive-widget=resizes-content` viewport rewrite is now applied only on Chromium, the engine that honors it. Safari's re-parsing of dynamically rewritten viewport metas has a history of quirks, and risking the layout viewport on an ignored key was a bad trade.
-- Streaming panes silently ended every touch drag after the first move — the dominant cause of "scrolling moves a few pixels at a time". Touch events are target-locked to the element under the finger at `touchstart`, and xterm's DOM renderer replaces its row elements on every render, so on a busy pane the touched span detached almost immediately and the rest of the gesture stopped propagating to any handler, ours or xterm's. Gestures now land on a stable transparent layer above the terminal (mobile only; real mouse wheels are forwarded through it), which turned an emulated 400px drag over a streaming buffer from 1 delivered touchmove and 1 scrolled line into 25/25 touchmoves and ~30 lines tracking the finger 1:1 — reproduced and verified end-to-end with CDP touch driving the vendored xterm build.
+- Restored touch pane resizing in narrow layouts; the outer full-screen dock remains fixed. Pointer cancellation, lost capture, blur, removal, and repeated drags clean up reliably.
+- Fixed scrolling that stalled after a few pixels over streaming terminals by using a stable gesture surface instead of replaceable xterm rows.
+- Preserved multi-row TUI wheel reports, small pixel-wheel deltas, and horizontal wheel panning. Reversing direction at a scroll boundary no longer has to consume accumulated overscroll first.
+- Fixed stale momentum after multi-touch/cancellation and paint guards that could remain held after a lost release. Expired gesture ownership can be reacquired without releasing another pane's gesture.
+- Kept toolbar scrolling independent from terminal gestures and prevented keyboard-induced focus reveals from shifting hidden pane containers. Viewport-meta keyboard adjustments are limited to supporting Chromium browsers.
+- Fixed close controls moving between pointer-down and pointer-up, delayed Hide during scrolling, and duplicate zoom from touch double-tap compatibility events.
+- Corrected native `swap-pane -d` argument ordering to preserve focus when the requested target is active.
+- Added request correlation, stale-response rejection, pending/error states, and no automatic mutation replay for session/client management.
+- Restored compatibility with DSH 0.1.2 by avoiding imports of removed settings registration helpers.
 
 ## [0.6.0] - 2026-08-29
 
@@ -189,7 +191,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Switched input to byte-safe, hex-encoded `send-keys -H` commands.
 - Paired control replies by tmux block tags and added command timeouts.
 
-[Unreleased]: https://github.com/adrianleb/dsh-tmux-cc/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/adrianleb/dsh-tmux-cc/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/adrianleb/dsh-tmux-cc/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/adrianleb/dsh-tmux-cc/compare/v0.5.4...v0.6.0
 [0.5.4]: https://github.com/adrianleb/dsh-tmux-cc/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/adrianleb/dsh-tmux-cc/compare/v0.5.2...v0.5.3

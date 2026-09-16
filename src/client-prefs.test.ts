@@ -95,15 +95,28 @@ test('versioned preference documents migrate without resetting existing values',
   assert.equal(migrated.compactSplitShortcuts, false)
 })
 
-test('kill confirmation arms the first action and accepts the repeated action', () => {
-  const source = functionSource('shouldArmKill')
-  const shouldArmKill = Function(`return (${source})`)() as (
-    enabled: boolean,
-    armedId: string,
-    requestedId: string,
-  ) => boolean
-  assert.equal(shouldArmKill(true, '', 'pane:%1'), true)
-  assert.equal(shouldArmKill(true, 'pane:%1', 'pane:%1'), false)
-  assert.equal(shouldArmKill(true, 'pane:%1', 'pane:%2'), true)
-  assert.equal(shouldArmKill(false, '', 'pane:%1'), false)
+for (const accepted of [true, false]) {
+  test(`pane close confirmation ${accepted ? 'accepts confirmation' : 'honors cancellation'}`, () => {
+    const prompts: string[] = []
+    const translated: string[] = []
+    const confirmPaneClose = Function('window', 't', `return (${functionSource('confirmPaneClose')})`)(
+      { confirm: (message: string) => { prompts.push(message); return accepted } },
+      (key: string) => { translated.push(key); return 'Localized close confirmation' },
+    ) as (enabled: boolean) => boolean
+
+    assert.equal(confirmPaneClose(true), accepted)
+    assert.deepEqual(translated, ['killConfirm'])
+    assert.deepEqual(prompts, ['Localized close confirmation'])
+    assert.equal(confirmPaneClose(true), accepted, 'each close request gets its own confirmation')
+    assert.equal(prompts.length, 2)
+  })
+}
+
+test('disabled pane close confirmation neither prompts nor translates a message', () => {
+  const confirmPaneClose = Function('window', 't', `return (${functionSource('confirmPaneClose')})`)(
+    { confirm: () => assert.fail('disabled confirmation must not prompt') },
+    () => assert.fail('disabled confirmation must not translate a prompt'),
+  ) as (enabled: boolean) => boolean
+
+  assert.equal(confirmPaneClose(false), true)
 })

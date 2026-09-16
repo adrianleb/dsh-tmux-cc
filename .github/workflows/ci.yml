@@ -30,5 +30,24 @@ jobs:
       - name: Test, type-check, and build
         run: pnpm run check
 
+      - name: Install browser engines and tmux
+        run: |
+          pnpm exec playwright install --with-deps chromium webkit
+          sudo apt-get install -y tmux
+
+      - name: Test desktop and mobile browser interactions
+        run: pnpm test:browser
+
+      - name: Verify swaps against isolated native tmux
+        run: pnpm test:native
+
+      - name: Preserve browser failure traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-traces
+          path: test-results/
+          retention-days: 7
+
       - name: Verify package contents
         run: pnpm pack --dry-run
